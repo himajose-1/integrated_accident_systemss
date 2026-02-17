@@ -1,0 +1,2454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accident Hotspot Identifier</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; height: 100vh; overflow: hidden; }
+        
+        .main-container { display: flex; height: 100vh; }
+        
+        /* Hamburger Menu */
+        .hamburger-btn {
+            display: none;
+            position: fixed;
+            top: 16px;
+            left: 16px;
+            z-index: 2000;
+            background: white;
+            border: 1px solid #dadce0;
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            font-size: 20px;
+            width: 48px;
+            height: 48px;
+            flex-shrink: 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .hamburger-btn:hover {
+            background: #f1f3f4;
+        }
+        
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+        
+        .sidebar-overlay.show {
+            display: block;
+        }
+ 
+        /* Left Sidebar */
+        .sidebar { width: 400px; background: white; display: flex; flex-direction: column; box-shadow: 2px 0 8px rgba(0,0,0,0.1); z-index: 1000; overflow: hidden; }
+        
+        .header { padding: 16px 20px; border-bottom: 1px solid #e0e0e0; }
+        .header h1 { font-size: 18px; font-weight: 500; color: #202124; margin-bottom: 8px; }
+        .header-tabs { display: flex; gap: 20px; margin-top: 12px; }
+        .tab { padding: 8px 0; font-size: 14px; color: #5f6368; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; }
+        .tab.active { color: #1a73e8; border-bottom-color: #1a73e8; font-weight: 500; }
+        .tab:hover { color: #1a73e8; }
+        
+        .search-section { padding: 20px; border-bottom: 1px solid #e0e0e0; }
+        .search-box { position: relative; margin-bottom: 12px; }
+        .search-box input { width: 100%; padding: 12px 40px 12px 16px; border: 1px solid #dadce0; border-radius: 8px; font-size: 14px; transition: all 0.2s; }
+        .search-box input:focus { outline: none; border-color: #1a73e8; box-shadow: 0 1px 6px rgba(26,115,232,0.3); }
+        .search-icon { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: #5f6368; }
+        
+        .location-inputs { display: flex; flex-direction: column; gap: 8px; }
+        .location-input { position: relative; }
+        .location-input-wrapper { position: relative; display: flex; gap: 8px; align-items: center; }
+        .location-input::before { content: ''; position: absolute; left: 16px; top: 50%; transform: translateY(-50%); width: 8px; height: 8px; border-radius: 50%; z-index: 1; }
+        .location-input.start::before { background: #1a73e8; }
+        .location-input.end::before { background: #ea4335; }
+        .location-input input { width: 100%; padding: 12px 16px 12px 36px; border: 1px solid #dadce0; border-radius: 8px; font-size: 14px; }
+        .location-input input:focus { outline: none; border-color: #1a73e8; }
+        
+        .current-location-btn {
+            padding: 12px;
+            background: #f1f3f4;
+            border: 1px solid #dadce0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 18px;
+            flex-shrink: 0;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .current-location-btn:hover {
+            background: #e8eaed;
+            border-color: #1a73e8;
+        }
+        
+        .current-location-btn:active {
+            background: #1a73e8;
+            color: white;
+        }
+        
+        .current-location-btn.loading {
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .route-button { width: 100%; margin-top: 12px; padding: 12px; background: #1a73e8; color: white; border: none; border-radius: 24px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+        .route-button:hover { background: #1765cc; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+        .route-button:disabled { background: #dadce0; cursor: not-allowed; }
+        
+        .route-info { padding: 20px; border-bottom: 1px solid #e0e0e0; background: #f8f9fa; }
+        .route-card { background: white; padding: 16px; border-radius: 8px; border-left: 4px solid #1a73e8; margin-bottom: 12px; cursor: pointer; transition: all 0.2s; }
+        .route-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .route-time { font-size: 18px; font-weight: 500; color: #202124; }
+        .route-distance { font-size: 13px; color: #5f6368; margin-top: 4px; }
+        .route-desc { font-size: 13px; color: #5f6368; margin-top: 8px; }
+        .route-warning { font-size: 13px; color: #c5221f; display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+        
+        .hotspots-section { flex: 1; overflow-y: auto; padding: 20px; }
+        .hotspots-section h3 { font-size: 16px; font-weight: 500; color: #202124; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+        
+        /* Route header for hotspots tab */
+        .route-header { 
+            background: #f8f9fa; 
+            padding: 16px 20px; 
+            border-bottom: 1px solid #e0e0e0;
+            display: none;
+        }
+        .route-header.show { display: block; }
+        .route-path { 
+            font-size: 15px; 
+            font-weight: 500; 
+            color: #202124; 
+            display: flex; 
+            align-items: center; 
+            gap: 8px;
+        }
+        .route-path .arrow { color: #5f6368; font-weight: 300; }
+        
+        /* Updated accident card styles */
+        .accident-card { 
+            background: white; 
+            border: 1px solid #e0e0e0; 
+            border-radius: 8px; 
+            padding: 14px; 
+            margin-bottom: 10px; 
+            cursor: pointer; 
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .accident-card:hover { 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1); 
+            border-color: #1a73e8; 
+        }
+        
+        .accident-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #34d399;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+        
+        .accident-icon.fatal { background: #ef4444; }
+        .accident-icon.major { background: #f97316; }
+        .accident-icon.minor { background: #34d399; }
+        
+        .accident-details {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .accident-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: #202124;
+            margin-bottom: 4px;
+        }
+        
+        .accident-description {
+            font-size: 12px;
+            color: #5f6368;
+            margin-bottom: 6px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .accident-meta {
+            display: flex;
+            gap: 12px;
+            font-size: 11px;
+            color: #5f6368;
+        }
+        
+        .accident-badge {
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        
+        .badge-verified {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        
+        .badge-pending {
+            background: #fff3e0;
+            color: #ef6c00;
+        }
+        
+        .hotspot-card { background: white; border: 1px solid #dadce0; border-radius: 8px; padding: 16px; margin-bottom: 12px; cursor: pointer; transition: all 0.2s; }
+        .hotspot-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-color: #1a73e8; }
+        .hotspot-header { display: flex; align-items: start; gap: 12px; }
+        .hotspot-icon { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+        .hotspot-icon.high { background: #fce8e6; color: #c5221f; }
+        .hotspot-icon.medium { background: #fef7e0; color: #f29900; }
+        .hotspot-icon.low { background: #fef9e7; color: #f9ab00; }
+        .hotspot-details { flex: 1; }
+        .hotspot-name { font-size: 14px; font-weight: 500; color: #202124; margin-bottom: 4px; }
+        .hotspot-desc { font-size: 13px; color: #5f6368; margin-bottom: 8px; }
+        .hotspot-stats { display: flex; gap: 16px; font-size: 12px; color: #5f6368; }
+        .hotspot-stats span { display: flex; align-items: center; gap: 4px; }
+        
+        /* Map Container */
+        .map-wrapper { flex: 1; position: relative; }
+        #map { height: 100%; width: 100%; }
+        
+        .map-controls { position: absolute; top: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
+        .map-btn { width: 48px; height: 48px; background: white; border: none; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); cursor: pointer; font-size: 20px; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+        .map-btn:hover { background: #f8f9fa; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+        
+        .legend { position: absolute; bottom: 20px; left: 20px; background: white; padding: 16px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1000; }
+        .legend h4 { font-size: 14px; font-weight: 500; color: #202124; margin-bottom: 12px; }
+        .legend-item { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 13px; color: #5f6368; }
+        .legend-dot { width: 16px; height: 16px; border-radius: 50%; }
+        
+        /* Traffic Density Panel */
+        .traffic-panel { background: white; padding: 16px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); z-index: 1000; display: none; }
+        .traffic-panel.show { display: block; }
+        .traffic-header { font-size: 14px; font-weight: 500; color: #202124; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
+        .traffic-status { font-size: 18px; font-weight: 600; padding: 8px 12px; border-radius: 6px; }
+        .traffic-status.light { background: #c6f6d5; color: #22543d; }
+        .traffic-status.moderate { background: #fed7aa; color: #7c2d12; }
+        .traffic-status.heavy { background: #fca5a5; color: #742a2a; }
+        .traffic-metric { display: flex; justify-content: space-between; font-size: 13px; color: #5f6368; margin-bottom: 8px; padding: 8px; background: #f8f9fa; border-radius: 4px; }
+        .traffic-metric strong { color: #202124; }
+        .congestion-bar { width: 100%; height: 24px; background: #e0e0e0; border-radius: 4px; overflow: hidden; margin: 8px 0; }
+        .congestion-fill { height: 100%; background: #10b981; transition: width 0.3s; }
+        .congestion-fill.moderate { background: #f59e0b; }
+        .congestion-fill.heavy { background: #ef4444; }
+        
+        /* Live Traffic Display */
+        .live-traffic-display {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+        
+        .live-traffic-display h4 {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .live-traffic-display .pulse {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+            animation: pulse 2s infinite;
+        }
+        
+        .traffic-info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        
+        .traffic-info-item {
+            background: rgba(255,255,255,0.1);
+            padding: 10px;
+            border-radius: 6px;
+            border-left: 3px solid #10b981;
+        }
+        
+        .traffic-info-label {
+            font-size: 11px;
+            opacity: 0.8;
+            margin-bottom: 4px;
+        }
+        
+        .traffic-info-value {
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .traffic-warning-badge {
+            background: rgba(255,107,107,0.2);
+            border: 1px solid rgba(255,107,107,0.5);
+            color: #ff6b6b;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .traffic-warning-badge.active {
+            background: rgba(255,107,107,0.3);
+            border-color: #ff6b6b;
+        }
+        
+        .location-badge {
+            background: #e0f2f1;
+            color: #00695c;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .location-badge.active {
+            background: #c8e6c9;
+            color: #1b5e20;
+        }
+        
+        .speed-indicator {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1a73e8;
+            margin: 8px 0;
+        }
+        
+        .speed-indicator.warning {
+            color: #f59e0b;
+        }
+        
+        .speed-indicator.critical {
+            color: #ef4444;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateX(-10px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        .traffic-notification {
+            animation: slideIn 0.3s ease-out;
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 12px;
+            font-size: 12px;
+        }
+        
+        .traffic-notification.critical {
+            background: #f8d7da;
+            border-left-color: #dc3545;
+        }
+        
+        .traffic-notification.success {
+            background: #d4edda;
+            border-left-color: #28a745;
+        }
+        
+        .loading { font-size: 13px; color: #5f6368; text-align: center; padding: 8px; }
+        
+        .empty-state {
+            padding: 32px 16px;
+            text-align: center;
+            color: #5f6368;
+            font-size: 14px;
+        }
+        
+        /* Feedback Toast Styles */
+        .feedback-toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: white;
+            border-radius: 8px;
+            padding: 16px 20px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+            z-index: 10000;
+            max-width: 320px;
+            display: none;
+            animation: slideInRight 0.3s ease-out;
+        }
+        
+        .feedback-toast.show {
+            display: block;
+        }
+        
+        @keyframes slideInRight {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .feedback-toast-question {
+            font-size: 14px;
+            color: #202124;
+            margin-bottom: 12px;
+            font-weight: 500;
+        }
+        
+        .feedback-toast-road {
+            color: #1a73e8;
+            font-weight: 600;
+        }
+        
+        .feedback-toast-buttons {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .feedback-toast-btn {
+            flex: 1;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .feedback-toast-btn.yes {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        
+        .feedback-toast-btn.yes:hover {
+            background: #fecaca;
+        }
+        
+        .feedback-toast-btn.no {
+            background: #dcfce7;
+            color: #166534;
+        }
+        
+        .feedback-toast-btn.no:hover {
+            background: #bbf7d0;
+        }
+        
+        .alternative-route-panel {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 12px;
+            border-radius: 6px;
+            margin-top: 12px;
+            display: none;
+            font-size: 13px;
+            color: #78350f;
+        }
+        
+        .alternative-route-panel.show {
+            display: block;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        .alternative-route-panel strong {
+            display: block;
+            margin-bottom: 8px;
+            color: #92400e;
+        }
+        
+        .route-option {
+            background: white;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+        
+        .route-option:hover {
+            border-color: #1a73e8;
+            transform: translateX(4px);
+        }
+        
+        .route-option-name {
+            font-weight: 500;
+            color: #202124;
+            margin-bottom: 4px;
+        }
+        
+        .route-option-details {
+            font-size: 12px;
+            color: #5f6368;
+        }
+        
+        /* Hide search and route info when hotspots or navigate tab is active */
+        body.hotspots-active .search-section,
+        body.hotspots-active .route-info,
+        body.navigate-active .search-section,
+        body.navigate-active .route-info {
+            display: none !important;
+        }
+        
+        @media (max-width: 768px) {
+            .hamburger-btn { display: flex; align-items: center; justify-content: center; }
+            
+            .main-container { flex-direction: column; }
+            
+            .sidebar {
+                width: 100%;
+                max-width: 400px;
+                position: fixed;
+                left: -400px;
+                top: 0;
+                height: 100vh;
+                bottom: 0;
+                overflow-y: auto;
+                margin-top: 0;
+                transition: left 0.3s ease-in-out;
+                border-radius: 0;
+                max-height: 100vh;
+            }
+            
+            .sidebar.show {
+                left: 0;
+            }
+            
+            .map { flex: 1; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Hamburger Menu Button -->
+    <button class="hamburger-btn" id="hamburgerBtn" title="Toggle Menu">☰</button>
+    
+    <!-- Sidebar Overlay (for mobile) -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+    
+    <div class="main-container">
+        <!-- Left Sidebar -->
+        <div class="sidebar" id="sidebar">
+            <div class="header">
+                <h1>🚨 Accident Hotspot Identifier</h1>
+                <div class="header-tabs">
+                    <div class="tab active" data-tab="route">Route</div>
+                    <div class="tab" data-tab="hotspots">Hotspots</div>
+                    <div class="tab" data-tab="navigate">Navigate</div>
+                </div>
+            </div>
+            
+            <div class="search-section">
+                <div class="location-inputs">
+                    <div class="location-input start">
+                        <div class="location-input-wrapper">
+                            <input type="text" id="startInput" placeholder="Starting point" value="Panayam, Kerala">
+                            <button class="current-location-btn" id="currentLocationBtn" title="Use current location">📍</button>
+                        </div>
+                    </div>
+                    <div class="location-input end">
+                        <input type="text" id="endInput" placeholder="Destination" value="Kazhakootam">
+                    </div>
+                </div>
+                <button class="route-button" id="getRouteBtn">Get Directions</button>
+            </div>
+            
+            <div class="route-info" id="routeInfo" style="display: none;">
+                <div class="route-card">
+                    <div class="route-time" id="routeTime">-- min</div>
+                    <div class="route-distance" id="routeDistance">-- km</div>
+                    <div class="route-desc" id="routeDesc">Calculating route...</div>
+                </div>
+                <div class="route-warning" id="routeWarning" style="display: none;">
+                    ⚠️ <strong id="warningText">Critical zones on route</strong>
+                </div>
+                <div class="alternative-route-panel" id="alternativeRoutePanel">
+                    <strong>🚗 Alternative Routes Available</strong>
+                    <div id="alternativeRoutesList"></div>
+                </div>
+            </div>
+            
+            <div class="hotspots-section" id="routeTab">
+                <h3>⚠️ Hotspots on Route</h3>
+                <div id="routeHotspotsList"></div>
+                <h3 style="margin-top: 20px;">🚨 Accidents on Route</h3>
+                <div id="routeAccidentsList"></div>
+            </div>
+            
+            <div class="hotspots-section" id="hotspotsTab" style="display: none;">
+                <div class="route-header" id="hotspotsRouteHeader">
+                    <div class="route-path">
+                        <span id="hotspotsStartLocation">Start</span>
+                        <span class="arrow">→</span>
+                        <span id="hotspotsEndLocation">Destination</span>
+                    </div>
+                </div>
+             
+                <h3 style="margin-top: 20px;">🚨 Recent Accident Reports</h3>
+                <div id="hotspotsAccidentsList"></div>
+            </div>
+            
+            <div class="hotspots-section" id="navigateTab" style="display: none;">
+                <h3>🧭 Live Navigation & Traffic</h3>
+                <div class="live-traffic-display" id="liveTrafficDisplay" style="display: none;">
+                    <h4><span class="pulse"></span> Live Traffic Status</h4>
+                    <div class="traffic-info-grid">
+                        <div class="traffic-info-item">
+                            <div class="traffic-info-label">Current Speed</div>
+                            <div class="traffic-info-value" id="liveCurrentSpeed">-- km/h</div>
+                        </div>
+                        <div class="traffic-info-item">
+                            <div class="traffic-info-label">Traffic Ahead</div>
+                            <div class="traffic-info-value" id="liveTrafficAhead">Light</div>
+                        </div>
+                        <div class="traffic-info-item">
+                            <div class="traffic-info-label">Heading</div>
+                            <div class="traffic-info-value" id="liveHeading">--°</div>
+                        </div>
+                        <div class="traffic-info-item">
+                            <div class="traffic-info-label">Distance Traveled</div>
+                            <div class="traffic-info-value" id="liveTravelDistance">0.0 km</div>
+                        </div>
+                    </div>
+                    <div class="traffic-info-item" style="margin-top: 12px;">
+                        <div class="traffic-info-label">Current Road</div>
+                        <div class="traffic-info-value" id="liveCurrentRoad" style="font-size: 14px;">Detecting...</div>
+                    </div>
+                    <div id="liveNotifications"></div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+                    <button id="startLiveNavBtn" class="route-button" style="margin-top: 0;">▶ Start Live Tracking</button>
+                    <button id="stopLiveNavBtn" class="route-button" style="margin-top: 0; background: #6b7280; display: none;">⏹ Stop Tracking</button>
+                </div>
+                <h3>📊 Route Traffic Analysis</h3>
+                <div id="navigationInfo">
+                    <div style="padding: 16px; background: #f8f9fa; border-radius: 8px; margin-bottom: 16px;">
+                        <p style="font-size: 14px; color: #5f6368; margin-bottom: 8px;">Start live tracking to see:</p>
+                        <p style="font-size: 13px; color: #5f6368;">• Real-time speed monitoring</p>
+                        <p style="font-size: 13px; color: #5f6368;">• Live traffic density updates</p>
+                        <p style="font-size: 13px; color: #5f6368;">• Proximity alerts to hotspots</p>
+                        <p style="font-size: 13px; color: #5f6368;">• Distance and heading info</p>
+                        <p style="font-size: 13px; color: #5f6368;">• Traffic feedback based on your location</p>
+                    </div>
+                </div>
+                <h3>🚦 Traffic Density Analysis</h3>
+                <div id="trafficPanel" class="traffic-panel show">
+                    <div class="traffic-header">
+                        <span>Traffic Status</span>
+                        <button id="trafficToggleBtn" class="route-button" style="width: auto; margin: 0; padding: 6px 12px; font-size: 12px;">Show on Map</button>
+                    </div>
+                    <div id="trafficContent">
+                        <div class="traffic-status light" id="trafficStatus">Light</div>
+                        <div class="traffic-metric">
+                            <span>Average Speed:</span>
+                            <strong id="trafficSpeed">-- km/h</strong>
+                        </div>
+                        <div class="traffic-metric">
+                            <span>Estimated Delay:</span>
+                            <strong id="trafficDelay">-- min</strong>
+                        </div>
+                        <div class="traffic-metric">
+                            <span>Congestion Level:</span>
+                            <strong id="congestionLevel">0%</strong>
+                        </div>
+                        <div style="margin-top: 12px;">
+                            <p style="font-size: 11px; color: #5f6368; margin-bottom: 6px;">Congestion Gauge:</p>
+                            <div class="congestion-bar">
+                                <div class="congestion-fill" id="congestionFill" style="width: 0%;"></div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 12px; padding: 12px; background: #f8f9fa; border-radius: 6px; font-size: 12px; color: #5f6368; display: none;" id="trafficRecommendations">
+                            <p style="margin: 0; font-weight: 500; color: #202124; margin-bottom: 6px;">💡 Recommendations:</p>
+                            <ul style="margin: 0; padding-left: 16px;">
+                                <li id="rec1" style="margin: 4px 0; display: none;"></li>
+                                <li id="rec2" style="margin: 4px 0; display: none;"></li>
+                                <li id="rec3" style="margin: 4px 0; display: none;"></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <h3>🚨 Recent Accident Reports</h3>
+                <div id="accidentsList"></div>
+            </div>
+        </div>
+        
+        <!-- Map -->
+        <div class="map-wrapper">
+            <div id="map"></div>
+            
+            <div class="map-controls">
+                <button class="map-btn" id="centerBtn" title="Center on location">📍</button>
+                <button class="map-btn" id="testFeedbackBtn" title="Test feedback">💬</button>
+                <button class="map-btn" id="trafficBtn" title="Show Traffic Density">🚦</button>
+                <button class="map-btn" id="layersBtn" title="Map layers">🗺️</button>
+                <button class="map-btn" id="startNavBtn" title="Start navigation">🧭</button>
+            </div>
+            
+            <div class="legend">
+                <h4>Risk Levels</h4>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background: #c5221f;"></div>
+                    <span>High Risk</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background: #f29900;"></div>
+                    <span>Medium Risk</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background: #f9ab00;"></div>
+                    <span>Low Risk</span>
+                </div>
+                <div class="legend-item">
+                    <div style="width: 12px; height: 12px; border-radius: 50%; background: #dc2626; border: 1px solid white; display: inline-block; margin-right: 8px;"></div>
+                    <span>Reported Accidents</span>
+                </div>
+                <div class="legend-item">
+                    <div style="width: 12px; height: 12px; border-radius: 50%; background: #ef4444; border: 3px solid white; display: inline-block; margin-right: 8px;"></div>
+                    <span>User-Reported Traffic</span>
+                </div>
+                <div class="legend-item">
+                    <div style="width: 16px; height: 2px; background: #9333ea; display: inline-block; margin-right: 8px;"></div>
+                    <span>Alternative Routes</span>
+                </div>
+            </div>
+            
+            <div class="navigation-panel" id="navPanel">
+                <div class="nav-speed" id="navSpeed">-- km/h</div>
+                <div class="nav-info">
+                    <div>Heading: <span id="navHeading">--°</span></div>
+                    <div>Distance to next: <span id="navDistance">--</span></div>
+                </div>
+                <div class="nav-warning" id="navWarning">
+                    ⚠️ Slow down! Approaching critical accident zone
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Feedback Toast -->
+    <div class="feedback-toast" id="feedbackToast">
+        <div class="feedback-toast-question">
+            Traffic on <span class="feedback-toast-road" id="feedbackRoadName">---</span>?
+        </div>
+        <div class="feedback-toast-buttons">
+            <button class="feedback-toast-btn no" id="feedbackNoBtn">No</button>
+            <button class="feedback-toast-btn yes" id="feedbackYesBtn">Yes</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <script>
+        // ==================== MOBILE RESPONSIVENESS ====================
+        const hamburgerBtn = document.getElementById('hamburgerBtn');
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebarOverlay');
+        
+        // Toggle sidebar on hamburger click
+        function toggleSidebar() {
+            sidebar.classList.toggle('show');
+            sidebarOverlay.classList.toggle('show');
+        }
+        
+        // Close sidebar when clicking overlay
+        sidebarOverlay.addEventListener('click', () => {
+            sidebar.classList.remove('show');
+            sidebarOverlay.classList.remove('show');
+        });
+        
+        // Close sidebar when clicking hamburger again
+        hamburgerBtn.addEventListener('click', toggleSidebar);
+        
+        // Close sidebar when clicking on sidebar items (on mobile)
+        document.addEventListener('click', (e) => {
+            if (window.innerWidth <= 768) {
+                if (sidebar.classList.contains('show') && 
+                    !sidebar.contains(e.target) && 
+                    !hamburgerBtn.contains(e.target)) {
+                    sidebar.classList.remove('show');
+                    sidebarOverlay.classList.remove('show');
+                }
+            }
+        });
+        
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 768) {
+                sidebar.classList.remove('show');
+                sidebarOverlay.classList.remove('show');
+            }
+        });
+        
+        // ==================== MAP INITIALIZATION ====================
+        const map = L.map('map').setView([8.5241, 76.9366], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
+            attribution: '© OpenStreetMap', 
+            maxZoom: 19 
+        }).addTo(map);
+
+        // Traffic layer variables
+        let trafficLayerEnabled = false;
+        let trafficVisualizationLayer = null;
+        let trafficOverlays = []; // red overlays (polylines or circles) for reported traffic
+
+        // Traffic density visualization function
+        // Previously this function colored route segments for visual effect.
+        // We no longer color the whole route. Keep as a no-op that clears previous visualization.
+        function createTrafficVisualization(routeCoords) {
+            if (trafficVisualizationLayer) {
+                map.removeLayer(trafficVisualizationLayer);
+                trafficVisualizationLayer = null;
+            }
+            // Intentionally do not draw gradient colors on the route.
+        }
+
+        // Calculate traffic metrics based on route
+        function calculateTrafficMetrics(route) {
+            const distance = (route.distance / 1000).toFixed(1);
+            const duration = Math.round(route.duration / 60);
+            const avgSpeed = duration > 0 ? Math.round((distance / duration) * 60) : 0;
+            
+            let trafficDensity = 'Light';
+            let congestionLevel = 0;
+            
+            if (avgSpeed < 20) {
+                trafficDensity = 'Heavy';
+                congestionLevel = 90;
+            } else if (avgSpeed < 40) {
+                trafficDensity = 'Moderate';
+                congestionLevel = 50;
+            } else if (avgSpeed < 60) {
+                trafficDensity = 'Moderate';
+                congestionLevel = 30;
+            } else {
+                trafficDensity = 'Light';
+                congestionLevel = 10;
+            }
+            
+            const delay = Math.max(0, Math.round((distance / 50 - duration) / 5) * 5);
+            
+            return {
+                density: trafficDensity,
+                avgSpeed,
+                delay,
+                congestionLevel,
+                distance,
+                duration
+            };
+        }
+
+        // Update traffic panel with metrics
+        function updateTrafficPanel(metrics) {
+            const status = document.getElementById('trafficStatus');
+            const speedEl = document.getElementById('trafficSpeed');
+            const delayEl = document.getElementById('trafficDelay');
+            const congestionEl = document.getElementById('congestionLevel');
+            const congestionFill = document.getElementById('congestionFill');
+            const recsDiv = document.getElementById('trafficRecommendations');
+            
+            // Update status
+            status.textContent = metrics.density;
+            status.className = 'traffic-status ' + metrics.density.toLowerCase();
+            
+            // Update metrics
+            speedEl.textContent = metrics.avgSpeed + ' km/h';
+            delayEl.textContent = metrics.delay + ' min';
+            congestionEl.textContent = metrics.congestionLevel + '%';
+            
+            // Update congestion gauge
+            congestionFill.style.width = metrics.congestionLevel + '%';
+            congestionFill.className = 'congestion-fill ' + 
+                (metrics.congestionLevel > 70 ? 'heavy' : metrics.congestionLevel > 40 ? 'moderate' : 'light');
+            
+            // Update recommendations
+            const recommendations = [];
+            if (metrics.density === 'Heavy') {
+                recommendations.push('Consider alternative routes');
+                recommendations.push('Allow extra travel time');
+                recommendations.push('Reduce speed and stay alert');
+            } else if (metrics.density === 'Moderate') {
+                recommendations.push('Stay attentive while driving');
+                recommendations.push('Maintain safe following distance');
+            } else {
+                recommendations.push('Good travel conditions');
+                recommendations.push('Optimal time for this route');
+            }
+            
+            if (recommendations.length > 0) {
+                recsDiv.style.display = 'block';
+                document.getElementById('rec1').textContent = recommendations[0];
+                document.getElementById('rec1').style.display = 'block';
+                if (recommendations.length > 1) {
+                    document.getElementById('rec2').textContent = recommendations[1];
+                    document.getElementById('rec2').style.display = 'block';
+                }
+                if (recommendations.length > 2) {
+                    document.getElementById('rec3').textContent = recommendations[2];
+                    document.getElementById('rec3').style.display = 'block';
+                }
+            }
+        }
+
+        // Traffic button handler
+        document.getElementById('trafficBtn').addEventListener('click', function() {
+            trafficLayerEnabled = !trafficLayerEnabled;
+            
+            if (trafficLayerEnabled) {
+                this.style.background = '#ef4444';
+                this.style.color = 'white';
+                if (trafficVisualizationLayer) {
+                    trafficVisualizationLayer.addTo(map);
+                }
+                document.getElementById('trafficToggleBtn').textContent = 'Hide from Map';
+            } else {
+                this.style.background = 'white';
+                this.style.color = '#000';
+                if (trafficVisualizationLayer) {
+                    map.removeLayer(trafficVisualizationLayer);
+                }
+                document.getElementById('trafficToggleBtn').textContent = 'Show on Map';
+            }
+        });
+
+        // Traffic toggle button in sidebar
+        document.getElementById('trafficToggleBtn').addEventListener('click', function() {
+            document.getElementById('trafficBtn').click();
+        });
+
+        // ==================== CURRENT LOCATION FUNCTION ====================
+        
+        // Reverse geocode coordinates to location name
+        async function reverseGeocode(lat, lng) {
+            try {
+                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16`);
+                const data = await response.json();
+                
+                if (data && data.address) {
+                    // Try to get a meaningful location name
+                    const road = data.address.road || '';
+                    const suburb = data.address.suburb || '';
+                    const city = data.address.city || data.address.town || data.address.village || '';
+                    const state = data.address.state || '';
+                    
+                    let locationName = '';
+                    if (road) locationName = road;
+                    else if (suburb) locationName = suburb;
+                    else if (city) locationName = city;
+                    
+                    if (city && locationName !== city) locationName += ', ' + city;
+                    if (state && locationName.indexOf(state) === -1) locationName += ', ' + state;
+                    
+                    return locationName || data.display_name;
+                }
+                return null;
+            } catch (error) {
+                console.error('Reverse geocoding error:', error);
+                return null;
+            }
+        }
+        
+        
+        // Clear stored coordinates when user manually edits the input fields
+        document.getElementById('startInput').addEventListener('input', function() {
+            if (!this.value.includes('(Current Location)')) {
+                storedStartCoords = null;
+            }
+        });
+        
+        document.getElementById('endInput').addEventListener('input', function() {
+            if (!this.value.includes('(Current Location)')) {
+                storedEndCoords = null;
+            }
+        });
+        
+        // Current location button handler
+        document.getElementById('currentLocationBtn').addEventListener('click', async function() {
+            if (!navigator.geolocation) {
+                alert('Geolocation is not supported by your browser');
+                return;
+            }
+            
+            const btn = this;
+            const input = document.getElementById('startInput');
+            
+            // Add loading state
+            btn.classList.add('loading');
+            btn.textContent = '⏳';
+            input.value = 'Getting current location...';
+            input.disabled = true;
+            
+            navigator.geolocation.getCurrentPosition(
+                async function(position) {
+                    const { latitude, longitude } = position.coords;
+                    
+                    // Store the actual GPS coordinates
+                    storedStartCoords = [latitude, longitude];
+                    
+                    // Reverse geocode to get location name
+                    const locationName = await reverseGeocode(latitude, longitude);
+                    
+                    if (locationName) {
+                        input.value = locationName + ' (Current Location)';
+                        console.log('Current location set to:', locationName, `(${latitude}, ${longitude})`);
+                        
+                        // Center map on current location
+                        map.setView([latitude, longitude], 15);
+                        
+                        // Add temporary marker at EXACT location
+                        if (currentMarker) map.removeLayer(currentMarker);
+                        currentMarker = L.marker([latitude, longitude], {
+                            icon: L.divIcon({
+                                html: '<div style="background: #1a73e8; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 0 8px rgba(26,115,232,0.2), 0 2px 4px rgba(0,0,0,0.3);"></div>',
+                                iconSize: [20, 20],
+                                iconAnchor: [10, 10]
+                            })
+                        }).addTo(map).bindPopup('Your Current Location');
+                    } else {
+                        input.value = `${latitude.toFixed(4)}, ${longitude.toFixed(4)} (Current Location)`;
+                    }
+                    
+                    // Remove loading state
+                    btn.classList.remove('loading');
+                    btn.textContent = '📍';
+                    input.disabled = false;
+                },
+                function(error) {
+                    console.error('Geolocation error:', error);
+                    let errorMessage = 'Unable to get location';
+                    
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMessage = 'Location permission denied';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMessage = 'Location unavailable';
+                            break;
+                        case error.TIMEOUT:
+                            errorMessage = 'Location request timed out';
+                            break;
+                    }
+                    
+                    alert(errorMessage);
+                    input.value = 'Panayam, Kerala';
+                    input.disabled = false;
+                    btn.classList.remove('loading');
+                    btn.textContent = '📍';
+                    storedStartCoords = null; // Clear stored coords on error
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
+            );
+        });
+
+        // ==================== LIVE TRACKING FUNCTIONS ====================
+        
+        let liveTrackingActive = false;
+        let trackingWatchId = null;
+        let currentLocationMarker = null;
+        let locationHistoryPoints = [];
+        let totalDistanceTraveled = 0;
+        let startLocation = null;
+        let nearbyHotspotWarnings = {};
+        let currentRoadName = '';
+        let previousRoadName = '';
+        let askedRoads = new Set(); // Track which roads we've already asked about
+        let userTrafficReports = []; // Store user-reported traffic locations
+        let trafficMarkers = []; // Store traffic marker references
+
+        // Get traffic density at location
+        function getTrafficDensityAtLocation(lat, lng, speed) {
+            if (!speed) return { level: 'Unknown', color: '#9ca3af', value: 0 };
+            
+            const speedKmh = speed * 3.6;
+            
+            if (speedKmh < 15) {
+                return { level: 'Heavy', color: '#ef4444', value: 90 };
+            } else if (speedKmh < 30) {
+                return { level: 'Moderate', color: '#f59e0b', value: 50 };
+            } else if (speedKmh < 50) {
+                return { level: 'Light', color: '#10b981', value: 25 };
+            } else {
+                return { level: 'Free Flow', color: '#06b6d4', value: 10 };
+            }
+        }
+
+        // Calculate distance between two points
+        function distanceBetweenPoints(lat1, lon1, lat2, lon2) {
+            const R = 6371; // km
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = 
+                Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        // Add notification
+        function addTrafficNotification(message, type = 'warning') {
+            const container = document.getElementById('liveNotifications');
+            if (!container) return;
+            
+            const notification = document.createElement('div');
+            notification.className = `traffic-notification ${type}`;
+            notification.innerHTML = `<strong>${message}</strong>`;
+            
+            container.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 5000);
+        }
+
+        // Detect current road name from coordinates
+        async function detectCurrentRoad(lat, lng) {
+            try {
+                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18`);
+                const data = await response.json();
+                
+                if (data && data.address) {
+                    const road = data.address.road || data.address.street || data.address.highway || 'Unknown Road';
+                    console.log('detectCurrentRoad ->', { lat, lng, road });
+                    return road;
+                }
+                console.log('detectCurrentRoad -> Unknown Road', { lat, lng, data });
+                return 'Unknown Road';
+            } catch (error) {
+                console.error('Road detection error:', error);
+                return 'Unknown Road';
+            }
+        }
+
+        // Show traffic feedback for current road
+        function showTrafficFeedback(roadName) {
+            console.log('showTrafficFeedback called for', roadName, { askedAlready: askedRoads.has(roadName) });
+            // Don't ask if we've already asked about this road
+            if (askedRoads.has(roadName)) {
+                return;
+            }
+            
+            // Don't ask about "Unknown Road"
+            if (roadName === 'Unknown Road') {
+                return;
+            }
+            
+            const toast = document.getElementById('feedbackToast');
+            const roadNameEl = document.getElementById('feedbackRoadName');
+            
+            roadNameEl.textContent = roadName;
+            toast.classList.add('show');
+            
+            // Mark this road as asked
+            askedRoads.add(roadName);
+            
+            console.log(`Asking for traffic feedback on ${roadName} based on current location`);
+            
+            // Auto-hide after 30 seconds if no response
+            setTimeout(() => {
+                hideFeedbackToast();
+            }, 30000);
+        }
+        
+        function hideFeedbackToast() {
+            const toast = document.getElementById('feedbackToast');
+            toast.classList.remove('show');
+        }
+
+        // Update live traffic display
+        async function updateLiveTrafficDisplay(speed, heading, lat, lng) {
+            console.log('updateLiveTrafficDisplay called', { speed, heading, lat, lng });
+            const display = document.getElementById('liveTrafficDisplay');
+            const uiVisible = display && display.style.display && display.style.display !== 'none';
+
+            const speedKmh = speed ? (speed * 3.6).toFixed(1) : 0;
+            const traffic = getTrafficDensityAtLocation(lat, lng, speed);
+
+            // Update UI elements only if the live display is visible
+            if (uiVisible) {
+                // Update current speed
+                document.getElementById('liveCurrentSpeed').textContent = speedKmh + ' km/h';
+
+                // Update traffic status
+                document.getElementById('liveTrafficAhead').textContent = traffic.level;
+                document.getElementById('liveTrafficAhead').style.color = traffic.color;
+
+                // Update heading
+                document.getElementById('liveHeading').textContent = (heading || 0).toFixed(0) + '°';
+
+                // Update distance traveled
+                if (startLocation) {
+                    totalDistanceTraveled = distanceBetweenPoints(
+                        startLocation.lat, startLocation.lng,
+                        lat, lng
+                    );
+                    document.getElementById('liveTravelDistance').textContent = totalDistanceTraveled.toFixed(1) + ' km';
+                }
+            }
+
+            // Detect current road regardless of UI visibility so feedback can trigger
+            const roadName = await detectCurrentRoad(lat, lng);
+
+            // Only update if road actually changed
+            if (roadName !== currentRoadName && roadName !== 'Unknown Road') {
+                // Update UI current road if visible
+                if (uiVisible) document.getElementById('liveCurrentRoad').textContent = roadName;
+                currentRoadName = roadName;
+
+                // Check if we've entered a new road from a previous road
+                if (previousRoadName && previousRoadName !== currentRoadName) {
+                    console.log(`Entered new road: ${currentRoadName} (from ${previousRoadName})`);
+                    addTrafficNotification(`📍 Now on ${currentRoadName}`, 'success');
+
+                    // Ask for traffic feedback on this new road after 3 seconds
+                    setTimeout(() => {
+                        showTrafficFeedback(currentRoadName);
+                    }, 3000);
+                }
+
+                // Update previous road name
+                previousRoadName = currentRoadName;
+            } else if (roadName !== 'Unknown Road' && currentRoadName === '') {
+                // First time detecting road
+                currentRoadName = roadName;
+                previousRoadName = roadName;
+                if (uiVisible) document.getElementById('liveCurrentRoad').textContent = roadName;
+
+                // Ask feedback for the first detected road even if UI is hidden
+                console.log(`First detected road: ${currentRoadName} — scheduling feedback ask`);
+                setTimeout(() => {
+                    showTrafficFeedback(currentRoadName);
+                }, 3000);
+            }
+
+            // Check for nearby hotspots
+            checkNearbyHotspots(lat, lng, speedKmh);
+        }
+
+        // Check for nearby accident hotspots
+        function checkNearbyHotspots(lat, lng, speed) {
+            accidentHotspots.forEach(spot => {
+                const distance = distanceBetweenPoints(lat, lng, spot.lat, spot.lng);
+                const warningKey = `hotspot_${spot.id}`;
+                
+                if (distance < 1) { // Within 1 km
+                    if (spot.severity === 'high' && speed > 10) {
+                        if (!nearbyHotspotWarnings[warningKey]) {
+                            addTrafficNotification(
+                                `⚠️ High-risk zone "${spot.name}" ahead (${(distance * 1000).toFixed(0)}m)`,
+                                'critical'
+                            );
+                            nearbyHotspotWarnings[warningKey] = true;
+                        }
+                    }
+                } else if (distance < 2) {
+                    if (spot.severity === 'medium' && !nearbyHotspotWarnings[warningKey]) {
+                        addTrafficNotification(
+                            `⚠️ Medium-risk area ahead (${(distance * 1000).toFixed(0)}m)`,
+                            'warning'
+                        );
+                        nearbyHotspotWarnings[warningKey] = true;
+                    }
+                } else {
+                    delete nearbyHotspotWarnings[warningKey];
+                }
+            });
+            
+            // Check for reported accidents
+            reportedAccidents.forEach(accident => {
+                const distance = distanceBetweenPoints(lat, lng, accident.latitude, accident.longitude);
+                const warningKey = `accident_${accident.id}`;
+                
+                if (distance < 0.5) { // Within 500m
+                    if (!nearbyHotspotWarnings[warningKey]) {
+                        addTrafficNotification(
+                            `🚨 Accident reported ahead (${(distance * 1000).toFixed(0)}m)`,
+                            'critical'
+                        );
+                        nearbyHotspotWarnings[warningKey] = true;
+                    }
+                } else {
+                    delete nearbyHotspotWarnings[warningKey];
+                }
+            });
+        }
+
+        // Start live tracking
+        function startLiveTracking() {
+            if (!navigator.geolocation) {
+                alert('Geolocation not supported on this device');
+                return;
+            }
+            
+            liveTrackingActive = true;
+            locationHistoryPoints = [];
+            totalDistanceTraveled = 0;
+            nearbyHotspotWarnings = {};
+            askedRoads.clear(); // Reset asked roads when starting new tracking session
+            currentRoadName = '';
+            previousRoadName = '';
+            
+            // Show live display
+            const display = document.getElementById('liveTrafficDisplay');
+            if (display) {
+                display.classList.add('show');
+                display.style.display = 'block';
+            }
+            
+            // Update button state
+            document.getElementById('startLiveNavBtn').style.display = 'none';
+            document.getElementById('stopLiveNavBtn').style.display = 'block';
+            
+            trackingWatchId = navigator.geolocation.watchPosition(
+                function(position) {
+                    const { latitude: lat, longitude: lng, speed, heading, accuracy } = position.coords;
+                    
+                    // Store initial location
+                    if (!startLocation) {
+                        startLocation = { lat, lng };
+                    }
+                    
+                    // Add point to history
+                    locationHistoryPoints.push({ lat, lng, time: new Date() });
+                    
+                    // Update map view
+                    map.setView([lat, lng], 16);
+                    
+                    // Update or create current location marker
+                    if (currentLocationMarker) {
+                        map.removeLayer(currentLocationMarker);
+                    }
+                    
+                    const markerColor = speed && speed * 3.6 > 60 ? '#ef4444' : '#1a73e8';
+                    currentLocationMarker = L.circleMarker([lat, lng], {
+                        radius: 12,
+                        fillColor: markerColor,
+                        color: '#ffffff',
+                        weight: 3,
+                        opacity: 1,
+                        fillOpacity: 0.9
+                    }).addTo(map).bindPopup(`
+                        <div>
+                            <strong>Current Location</strong><br>
+                            Speed: ${(speed * 3.6).toFixed(1)} km/h<br>
+                            Accuracy: ${accuracy.toFixed(0)}m
+                        </div>
+                    `);
+                    
+                    // Update live display (this will also detect road changes)
+                    updateLiveTrafficDisplay(speed, heading, lat, lng);
+                },
+                function(error) {
+                    console.error('Geolocation error:', error);
+                    addTrafficNotification('❌ Unable to get location: ' + error.message, 'critical');
+                },
+                {
+                    enableHighAccuracy: true,
+                    maximumAge: 0,
+                    timeout: 5000
+                }
+            );
+            
+            addTrafficNotification('▶️ Live tracking started - Traffic feedback will be requested when you enter new roads', 'success');
+        }
+
+        // Stop live tracking
+        function stopLiveTracking() {
+            if (trackingWatchId !== null) {
+                navigator.geolocation.clearWatch(trackingWatchId);
+                trackingWatchId = null;
+            }
+            
+            liveTrackingActive = false;
+            
+            // Hide live display
+            const display = document.getElementById('liveTrafficDisplay');
+            if (display) {
+                display.classList.remove('show');
+            }
+            
+            // Update button state
+            document.getElementById('startLiveNavBtn').style.display = 'block';
+            document.getElementById('stopLiveNavBtn').style.display = 'none';
+            
+            // Hide feedback toast if showing
+            hideFeedbackToast();
+            
+            // Show summary
+            addTrafficNotification(
+                `⏹️ Tracking stopped | Distance: ${totalDistanceTraveled.toFixed(1)} km | Roads tracked: ${askedRoads.size}`,
+                'success'
+            );
+            
+            console.log('Live tracking stopped. Summary:', {
+                pointsCollected: locationHistoryPoints.length,
+                distanceTraveled: totalDistanceTraveled,
+                roadsAskedAbout: Array.from(askedRoads),
+                duration: locationHistoryPoints.length > 0 ? 
+                    ((new Date() - locationHistoryPoints[0].time) / 60000).toFixed(1) + ' min' : '0 min'
+            });
+        }
+
+        // Event listeners for live tracking buttons
+        document.getElementById('startLiveNavBtn').addEventListener('click', startLiveTracking);
+        document.getElementById('stopLiveNavBtn').addEventListener('click', stopLiveTracking);
+
+        // Test feedback button (manual trigger for debugging)
+        const testBtn = document.getElementById('testFeedbackBtn');
+        if (testBtn) {
+            testBtn.addEventListener('click', () => {
+                const road = currentRoadName || 'Test Road';
+                console.log('Manual feedback test for', road);
+                showTrafficFeedback(road);
+            });
+        }
+
+        // Add red overlay on route near given lat/lng (polyline segment when route exists, circle otherwise)
+        function addTrafficOverlay(lat, lng, infoText) {
+            try {
+                // remove expired overlays handled by backend; overlays here are visual only
+                if (routeLine && routeLine.getLatLngs && routeLine.getLatLngs().length > 0) {
+                    const pts = routeLine.getLatLngs();
+                    // find nearest vertex index
+                    let bestIdx = 0;
+                    let bestDist = Infinity;
+                    for (let i = 0; i < pts.length; i++) {
+                        const d = map.distance([lat, lng], [pts[i].lat, pts[i].lng]);
+                        if (d < bestDist) { bestDist = d; bestIdx = i; }
+                    }
+
+                    // pick a small segment around that index
+                    const start = Math.max(0, bestIdx - 3);
+                    const end = Math.min(pts.length - 1, bestIdx + 3);
+                    const seg = [];
+                    for (let i = start; i <= end; i++) seg.push([pts[i].lat, pts[i].lng]);
+
+                    const overlay = L.polyline(seg, {
+                        color: '#ef4444',
+                        weight: 8,
+                        opacity: 0.85
+                    }).addTo(map);
+
+                    if (infoText) overlay.bindPopup(infoText);
+                    trafficOverlays.push(overlay);
+                } else {
+                    // fallback to a filled circle overlay (not a marker)
+                    const circle = L.circle([lat, lng], {
+                        radius: 40,
+                        color: '#ef4444',
+                        weight: 2,
+                        fillColor: '#ef4444',
+                        fillOpacity: 0.6
+                    }).addTo(map);
+                    if (infoText) circle.bindPopup(infoText);
+                    trafficOverlays.push(circle);
+                }
+            } catch (e) { console.error('addTrafficOverlay error', e); }
+        }
+
+        // Load active traffic reports from backend and display overlays (red on route)
+        async function loadActiveTrafficReports() {
+            try {
+                const res = await fetch('/api/reports/traffic');
+                const payload = await res.json();
+                if (payload && payload.success && payload.data && payload.data.reports) {
+                    payload.data.reports.forEach(r => {
+                        try {
+                            addTrafficOverlay(r.latitude, r.longitude, `Traffic: ${r.road} — Expires: ${new Date(r.expires_at).toLocaleString()}`);
+                        } catch (e) { console.error('Overlay error', e); }
+                    });
+                }
+            } catch (e) {
+                console.error('Failed to load active traffic reports:', e);
+            }
+        }
+
+        // Initial load of active reports
+        loadActiveTrafficReports();
+
+        // ==================== ALTERNATIVE ROUTES ====================
+        
+        let alternativeRouteLines = []; // Store alternative route polylines
+        let alternativeRoutesData = []; // Store full route data
+        
+        async function findAlternativeRoutes(startCoords, endCoords, avoidRoad) {
+            try {
+                console.log('Fetching alternative routes from OSRM...');
+                // Request multiple alternative routes from OSRM
+                const url = `https://router.project-osrm.org/route/v1/driving/${startCoords[1]},${startCoords[0]};${endCoords[1]},${endCoords[0]}?alternatives=3&overview=full&geometries=geojson&steps=true`;
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.code === 'Ok' && data.routes && data.routes.length > 1) {
+                    console.log(`Found ${data.routes.length} routes from OSRM`);
+                    // Process alternative routes (skip the first one as it's the current route)
+                    const alternatives = data.routes.slice(1).map((route, index) => {
+                        const waypoints = extractWaypoints(route.legs[0].steps);
+                        const routeName = waypoints.length > 0 ? 
+                            `Via ${waypoints[0]}` : 
+                            `Alternative Route ${index + 1}`;
+                        
+                        // Calculate time difference
+                        const timeDiff = (route.duration - currentRoute.duration) / 60;
+                        const timeDiffText = timeDiff > 0 ? 
+                            `+${Math.round(timeDiff)} min` : 
+                            `${Math.round(timeDiff)} min`;
+                        
+                        // Calculate distance difference
+                        const distDiff = (route.distance - currentRoute.distance) / 1000;
+                        const distDiffText = distDiff > 0 ? 
+                            `+${distDiff.toFixed(1)} km` : 
+                            `${distDiff.toFixed(1)} km`;
+                        
+                        return {
+                            name: routeName,
+                            duration: route.duration,
+                            distance: route.distance,
+                            savings: `${timeDiffText}, ${distDiffText}`,
+                            geometry: route.geometry,
+                            steps: route.legs[0].steps,
+                            fullRoute: route
+                        };
+                    });
+                    
+                    // Store alternative routes data
+                    alternativeRoutesData = alternatives;
+                    
+                    console.log('Alternative routes:', alternatives.map(r => r.name));
+                    return alternatives;
+                }
+                
+                // If no alternatives found, return empty array
+                console.log('No alternative routes found from OSRM');
+                return [];
+                
+            } catch (error) {
+                console.error('Error fetching alternative routes:', error);
+                return [];
+            }
+        }
+        
+        function displayAlternativeRoutes(routes, roadWithTraffic) {
+            const panel = document.getElementById('alternativeRoutePanel');
+            const list = document.getElementById('alternativeRoutesList');
+            
+            list.innerHTML = '';
+            
+            // Clear previous alternative route lines from map
+            alternativeRouteLines.forEach(line => map.removeLayer(line));
+            alternativeRouteLines = [];
+            
+            if (routes.length === 0) {
+                list.innerHTML = '<p style="font-size: 12px; color: #5f6368;">No alternative routes available at this time.</p>';
+                panel.classList.add('show');
+                return;
+            }
+            
+            // Draw alternative routes on map with different colors
+            const colors = ['#9333ea', '#ec4899', '#f97316'];
+            routes.forEach((route, index) => {
+                const coords = route.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+                const routeLine = L.polyline(coords, {
+                    color: colors[index % colors.length],
+                    weight: 4,
+                    opacity: 0.6,
+                    dashArray: '10, 10'
+                }).addTo(map);
+                
+                alternativeRouteLines.push(routeLine);
+                
+                // Create route option in sidebar
+                const option = document.createElement('div');
+                option.className = 'route-option';
+                option.innerHTML = `
+                    <div class="route-option-name">${route.name}</div>
+                    <div class="route-option-details">
+                        ${calculateTime(route.duration)} • ${calculateDistance(route.distance)} km
+                        <br>${route.savings}
+                    </div>
+                `;
+                option.onclick = () => selectAlternativeRoute(index, route);
+                list.appendChild(option);
+            });
+            
+            panel.classList.add('show');
+        }
+        
+        function selectAlternativeRoute(index, route) {
+            console.log(`User selected alternative route ${index + 1}:`, route.name);
+            
+            // Replace current route with selected alternative
+            currentRoute = route.fullRoute;
+            
+            // Remove old route line
+            if (routeLine) map.removeLayer(routeLine);
+            
+            // Draw new route
+            const coords = route.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+            routeLine = L.polyline(coords, {
+                color: '#5f6bd8',
+                weight: 6,
+                opacity: 0.8
+            }).addTo(map);
+            
+            // Update route info
+            document.getElementById('routeTime').textContent = calculateTime(route.duration);
+            document.getElementById('routeDistance').textContent = calculateDistance(route.distance) + ' km';
+            document.getElementById('routeDesc').textContent = route.name + ' (Alternative route)';
+            
+            // Recalculate hotspots for new route
+            const routeRiskData = checkRouteHotspots(route.geometry.coordinates);
+            
+            const criticalHotspots = hotspotsOnRoute.filter(h => h.severity === 'high').length;
+            const highHotspots = hotspotsOnRoute.filter(h => h.severity === 'medium').length;
+            const fatalAccidents = accidentsOnRoute.filter(a => a.severity === 'Fatal').length;
+            const majorAccidents = accidentsOnRoute.filter(a => a.severity === 'Major').length;
+            
+            const totalRiskPoints = criticalHotspots + highHotspots + fatalAccidents + majorAccidents;
+            
+            const warningDiv = document.getElementById('routeWarning');
+            const warningText = document.getElementById('warningText');
+            
+            if (totalRiskPoints > 0) {
+                let warning = `${totalRiskPoints} risk point${totalRiskPoints > 1 ? 's' : ''} on new route`;
+                warningText.textContent = warning;
+                warningDiv.style.display = 'flex';
+            } else {
+                warningDiv.style.display = 'none';
+            }
+            
+            // Update lists
+            renderRouteHotspotsList(hotspotsOnRoute);
+            renderRouteAccidentsList(accidentsOnRoute);
+            
+            // Recalculate traffic metrics
+            const trafficMetrics = calculateTrafficMetrics(route.fullRoute);
+            updateTrafficPanel(trafficMetrics);
+            createTrafficVisualization(route.geometry.coordinates);
+            
+            // Fit map to new route
+            map.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
+            
+            // Clear alternative routes from map and panel
+            alternativeRouteLines.forEach(line => map.removeLayer(line));
+            alternativeRouteLines = [];
+            document.getElementById('alternativeRoutePanel').classList.remove('show');
+            
+            // Show confirmation
+            addTrafficNotification(`✅ Route changed to: ${route.name}`, 'success');
+        }
+
+        // ==================== FEEDBACK BUTTON HANDLERS ====================
+        
+        // Feedback "No" button handler
+        document.getElementById('feedbackNoBtn').addEventListener('click', function() {
+            console.log(`No traffic on ${currentRoadName}`);
+            hideFeedbackToast();
+            addTrafficNotification(`✅ Good traffic conditions on ${currentRoadName}`, 'success');
+        });
+        
+        // Feedback "Yes" button handler - UPDATED TO MARK TRAFFIC ON MAP AND SUGGEST ALTERNATIVES
+        document.getElementById('feedbackYesBtn').addEventListener('click', async function() {
+            // Get current location from live tracking
+            if (locationHistoryPoints.length > 0) {
+                const lastPoint = locationHistoryPoints[locationHistoryPoints.length - 1];
+                
+                // Store the traffic report
+                const trafficReport = {
+                    road: currentRoadName,
+                    lat: lastPoint.lat,
+                    lng: lastPoint.lng,
+                    timestamp: new Date()
+                };
+                userTrafficReports.push(trafficReport);
+                
+                // Add a red marker at this location
+                const trafficMarker = L.circleMarker([lastPoint.lat, lastPoint.lng], {
+                    radius: 10,
+                    fillColor: '#ef4444',
+                    color: '#ffffff',
+                    weight: 3,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                }).addTo(map).bindPopup(`
+                    <div style="font-family: Arial;">
+                        <h3 style="margin: 0 0 8px 0; font-size: 14px; color: #dc2626;">⚠️ Traffic Reported</h3>
+                        <p style="margin: 0; font-size: 13px;"><strong>Road:</strong> ${currentRoadName}</p>
+                        <p style="margin: 4px 0 0 0; font-size: 12px; color: #5f6368;">Reported: ${new Date().toLocaleTimeString()}</p>
+                    </div>
+                `);
+                
+                // Store marker reference
+                trafficMarkers.push(trafficMarker);
+                
+                console.log(`Traffic reported on ${currentRoadName} at (${lastPoint.lat}, ${lastPoint.lng})`);
+                // Persist report to backend (visible to all users for 2 hours)
+                try {
+                    fetch('/api/reports/traffic', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            latitude: lastPoint.lat,
+                            longitude: lastPoint.lng,
+                            road: currentRoadName,
+                            severity: 'heavy',
+                            description: 'User-reported traffic from app'
+                        })
+                    }).then(res => res.json()).then(data => {
+                        console.log('Traffic report saved:', data);
+                        // show overlay locally immediately
+                        addTrafficOverlay(lastPoint.lat, lastPoint.lng, `Traffic: ${currentRoadName} — Reported`);
+                    }).catch(err => console.error('Failed to save traffic report:', err));
+                } catch (e) { console.error(e); }
+                hideFeedbackToast();
+                addTrafficNotification(`⚠️ Traffic reported on ${currentRoadName} - Marked on map`, 'critical');
+                
+                // If we have a route, show alternative routes
+                if (currentRoute) {
+                    addTrafficNotification(`🔍 Searching for alternative routes...`, 'warning');
+                    
+                    let startCoords = storedStartCoords;
+                    if (!startCoords) {
+                        const startName = document.getElementById('startInput').value.trim();
+                        startCoords = await geocodeLocation(startName);
+                    }
+                    
+                    let endCoords = storedEndCoords;
+                    if (!endCoords) {
+                        const endName = document.getElementById('endInput').value.trim();
+                        endCoords = await geocodeLocation(endName);
+                    }
+                    
+                    if (startCoords && endCoords) {
+                        const alternatives = await findAlternativeRoutes(startCoords, endCoords, currentRoadName);
+                        
+                        if (alternatives.length > 0) {
+                            displayAlternativeRoutes(alternatives, currentRoadName);
+                            addTrafficNotification(`✅ Found ${alternatives.length} alternative route${alternatives.length > 1 ? 's' : ''}`, 'success');
+                        } else {
+                            addTrafficNotification(`⚠️ No alternative routes available`, 'warning');
+                        }
+                    }
+                }
+            } else {
+                console.log('No location data available to mark traffic');
+                hideFeedbackToast();
+                addTrafficNotification(`⚠️ Traffic noted on ${currentRoadName}`, 'warning');
+            }
+        });
+
+
+        const accidentHotspots = [
+            { id: 1, name: "Hotspot #1", lat: 8.5241, lng: 76.9366, severity: 'high', accidents: 45, casualties: 15, type: 'intersection', description: 'High-risk accident zone with multiple incidents' },
+            { id: 2, name: "Hotspot #2", lat: 8.4855, lng: 76.9492, severity: 'medium', accidents: 28, casualties: 6, type: 'intersection', description: 'Medium-risk area requiring caution' },
+            { id: 3, name: "Hotspot #3", lat: 8.4925, lng: 76.9550, severity: 'low', accidents: 34, casualties: 8, type: 'intersection', description: 'Low-risk zone with moderate traffic' },
+            { id: 4, name: "Hotspot #4", lat: 8.5089, lng: 76.9570, severity: 'medium', accidents: 31, casualties: 10, type: 'intersection', description: 'Medium-risk area with traffic congestion' },
+            { id: 5, name: "Hotspot #5", lat: 8.5194, lng: 76.9458, severity: 'high', accidents: 52, casualties: 19, type: 'intersection', description: 'High-risk accident hotspot' },
+            { id: 6, name: "Hotspot #6", lat: 8.5320, lng: 76.9280, severity: 'low', accidents: 19, casualties: 3, type: 'intersection', description: 'Low-risk area with light traffic' }
+        ];
+
+        let reportedAccidents = [];
+        let hotspotMarkers = [];
+        let accidentMarkers = [];
+        let routeLine = null;
+        let startMarker = null;
+        let endMarker = null;
+        let currentMarker = null;
+        let isNavigating = false;
+        let watchId = null;
+        let currentRoute = null;
+        let hotspotsOnRoute = [];
+        let accidentsOnRoute = [];
+        let startLocationName = '';
+        let endLocationName = '';
+        let storedStartCoords = null; // Store actual GPS coords when using current location
+        let storedEndCoords = null;
+
+        // Fetch accident reports from backend
+        async function fetchAccidentReports() {
+            try {
+                const response = await fetch('http://localhost:8000/api/reports/?limit=50');
+                const data = await response.json();
+                if (data.success) {
+                    reportedAccidents = data.data.reports.map(report => ({
+                        id: report.id,
+                        latitude: report.latitude,
+                        longitude: report.longitude,
+                        severity: report.severity,
+                        description: report.description || 'No description',
+                        weather: report.weather || 'Unknown',
+                        road_condition: report.road_condition || 'Unknown',
+                        vehicle_type: report.vehicle_type || 'Unknown',
+                        time_of_day: report.time_of_day || 'Unknown',
+                        verified: report.verified || false,
+                        reported_at: report.reported_at
+                    }));
+                    updateAccidentsList();
+                    addAccidentMarkers();
+                }
+            } catch (error) {
+                console.error('Failed to fetch accident reports:', error);
+                // Fallback to sample data if backend is not available
+                reportedAccidents = [
+                    { id: 1, latitude: 8.5241, longitude: 76.9366, severity: 'Fatal', description: 'Car collision at intersection', weather: 'Clear', road_condition: 'Dry', vehicle_type: 'Car', time_of_day: 'Evening', verified: true, reported_at: '2024-01-25T18:30:00Z' },
+                    { id: 2, latitude: 8.4855, longitude: 76.9492, severity: 'Minor', description: 'Minor fender bender', weather: 'Rainy', road_condition: 'Wet', vehicle_type: 'Car', time_of_day: 'Morning', verified: false, reported_at: '2024-01-25T08:15:00Z' },
+                    { id: 3, latitude: 8.4925, longitude: 76.9550, severity: 'Fatal', description: 'Pedestrian accident', weather: 'Clear', road_condition: 'Dry', vehicle_type: 'Car', time_of_day: 'Night', verified: true, reported_at: '2024-01-24T22:45:00Z' },
+                    { id: 4, latitude: 8.5089, longitude: 76.9570, severity: 'Major', description: 'Two-vehicle collision', weather: 'Foggy', road_condition: 'Wet', vehicle_type: 'Truck', time_of_day: 'Afternoon', verified: true, reported_at: '2024-01-25T14:20:00Z' },
+                    { id: 5, latitude: 8.5194, longitude: 76.9458, severity: 'Minor', description: 'Rear-end collision', weather: 'Clear', road_condition: 'Dry', vehicle_type: 'Motorcycle', time_of_day: 'Evening', verified: false, reported_at: '2024-01-25T17:10:00Z' }
+                ];
+                updateAccidentsList();
+                addAccidentMarkers();
+            }
+        }
+
+        // Create accident card HTML
+        function createAccidentCard(accident) {
+            const iconClass = accident.severity === 'Fatal' ? 'fatal' : accident.severity === 'Major' ? 'major' : 'minor';
+            const badgeClass = accident.verified ? 'badge-verified' : 'badge-pending';
+            const badgeText = accident.verified ? 'Verified' : 'Pending';
+            
+            const card = document.createElement('div');
+            card.className = 'accident-card';
+            card.innerHTML = `
+                <div class="accident-icon ${iconClass}">🚨</div>
+                <div class="accident-details">
+                    <div class="accident-title">Accident #${accident.id}</div>
+                    <div class="accident-description">${accident.description}</div>
+                    <div class="accident-meta">
+                        <span>${accident.severity}</span>
+                        <span class="accident-badge ${badgeClass}">${badgeText}</span>
+                    </div>
+                </div>
+            `;
+            
+            card.onclick = () => {
+                map.setView([accident.latitude, accident.longitude], 16);
+                accidentMarkers.forEach(({ marker, accident: acc }) => {
+                    if (acc.id === accident.id) {
+                        marker.openPopup();
+                    }
+                });
+            };
+            
+            return card;
+        }
+
+        // Update accidents list in sidebar
+        function updateAccidentsList(accidentsToShow = reportedAccidents) {
+            const accidentsList = document.getElementById('accidentsList');
+            accidentsList.innerHTML = '';
+
+            if (accidentsToShow.length === 0) {
+                accidentsList.innerHTML = '<div class="empty-state">No accident reports available</div>';
+                return;
+            }
+
+            accidentsToShow.slice(0, 10).forEach(accident => {
+                accidentsList.appendChild(createAccidentCard(accident));
+            });
+        }
+
+        // Add accident markers to map
+        function addAccidentMarkers() {
+            // Clear existing markers
+            accidentMarkers.forEach(({ marker }) => map.removeLayer(marker));
+            accidentMarkers = [];
+
+            reportedAccidents.forEach(accident => {
+                const color = accident.severity === 'Fatal' ? '#dc2626' : accident.severity === 'Major' ? '#ea580c' : '#16a34a';
+                const icon = L.divIcon({
+                    html: `<div style="background: ${color}; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: bold; animation: pulse 2s infinite;">🚨</div>`,
+                    iconSize: [20, 20],
+                    iconAnchor: [10, 10]
+                });
+
+                const marker = L.marker([accident.latitude, accident.longitude], { icon }).addTo(map);
+                marker.bindPopup(`
+                    <div style="font-family: Arial; max-width: 250px;">
+                        <h3 style="margin: 0 0 8px 0; font-size: 16px; color: #202124;">${accident.severity} Accident</h3>
+                        <p style="margin: 0 0 12px 0; font-size: 13px; color: #5f6368;">${accident.description}</p>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px;">
+                            <div><strong>Weather:</strong> ${accident.weather}</div>
+                            <div><strong>Road:</strong> ${accident.road_condition}</div>
+                            <div><strong>Vehicle:</strong> ${accident.vehicle_type}</div>
+                            <div><strong>Time:</strong> ${accident.time_of_day}</div>
+                            <div><strong>Reported:</strong> ${new Date(accident.reported_at).toLocaleString()}</div>
+                            <div><strong>Status:</strong> ${accident.verified ? 'Verified' : 'Pending'}</div>
+                        </div>
+                    </div>
+                `);
+                accidentMarkers.push({ marker, accident });
+            });
+        }
+
+        // Add hotspots to map
+        accidentHotspots.forEach(spot => {
+            const color = spot.severity === 'high' ? '#c5221f' : spot.severity === 'medium' ? '#f29900' : '#f9ab00';
+            const size = spot.severity === 'high' ? 32 : spot.severity === 'medium' ? 28 : 24;
+            
+            const icon = L.divIcon({
+                html: `<div style="background: ${color}; width: ${size}px; height: ${size}px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-size: 16px; font-weight: bold;">⚠</div>`,
+                iconSize: [size, size],
+                iconAnchor: [size/2, size/2]
+            });
+            
+            const marker = L.marker([spot.lat, spot.lng], { icon }).addTo(map);
+            marker.bindPopup(`
+                <div style="font-family: Arial; max-width: 250px;">
+                    <h3 style="margin: 0 0 8px 0; font-size: 16px; color: #202124;">${spot.name}</h3>
+                    <p style="margin: 0 0 12px 0; font-size: 13px; color: #5f6368;">${spot.description}</p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px;">
+                        <div><strong>Accidents:</strong> ${spot.accidents}</div>
+                        <div><strong>Casualties:</strong> ${spot.casualties}</div>
+                        <div><strong>Type:</strong> ${spot.type}</div>
+                        <div><strong>Severity:</strong> ${spot.severity}</div>
+                    </div>
+                </div>
+            `);
+            hotspotMarkers.push({ marker, spot });
+        });
+
+        // Render hotspots list
+        function renderHotspotsList(hotspotsToShow = accidentHotspots) {
+            const list = document.getElementById('hotspotsList');
+            
+            if (hotspotsToShow.length === 0) {
+                list.innerHTML = '<div class="empty-state">Calculate a route to see hotspots along your path</div>';
+                return;
+            }
+            
+            list.innerHTML = hotspotsToShow.map(spot => `
+                <div class="hotspot-card" onclick="focusHotspot(${spot.id})">
+                    <div class="hotspot-header">
+                        <div class="hotspot-icon ${spot.severity}">⚠️</div>
+                        <div class="hotspot-details">
+                            <div class="hotspot-name">${spot.name}</div>
+                            <div class="hotspot-desc">${spot.description}</div>
+                            <div class="hotspot-stats">
+                                <span>📊 ${spot.accidents} accidents</span>
+                                <span>👥 ${spot.casualties} casualties</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Render route hotspots list
+        function renderRouteHotspotsList(hotspotsToShow = []) {
+            const list = document.getElementById('routeHotspotsList');
+            if (hotspotsToShow.length === 0) {
+                list.innerHTML = '<div class="empty-state">Calculate a route to see hotspots along your path</div>';
+                return;
+            }
+            list.innerHTML = hotspotsToShow.map(spot => `
+                <div class="hotspot-card" onclick="focusHotspot(${spot.id})">
+                    <div class="hotspot-header">
+                        <div class="hotspot-icon ${spot.severity}">⚠️</div>
+                        <div class="hotspot-details">
+                            <div class="hotspot-name">${spot.name}</div>
+                            <div class="hotspot-desc">${spot.description}</div>
+                            <div class="hotspot-stats">
+                                <span>📊 ${spot.accidents} accidents</span>
+                                <span>👥 ${spot.casualties} casualties</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Render accidents list with new card design
+        function renderAccidentsList(accidentsToShow = [], listId = 'hotspotsAccidentsList') {
+            const list = document.getElementById(listId);
+            
+            if (accidentsToShow.length === 0) {
+                list.innerHTML = '<div class="empty-state">Calculate a route to see accident reports along your path</div>';
+                return;
+            }
+            
+            list.innerHTML = '';
+            accidentsToShow.slice(0, 10).forEach(accident => {
+                list.appendChild(createAccidentCard(accident));
+            });
+        }
+
+        // Render route accidents list
+        function renderRouteAccidentsList(accidentsToShow = [], listId = 'routeAccidentsList') {
+            renderAccidentsList(accidentsToShow, listId);
+        }
+
+        window.focusHotspot = function(id) {
+            const hotspot = accidentHotspots.find(h => h.id === id);
+            if (hotspot) {
+                map.setView([hotspot.lat, hotspot.lng], 16);
+                const marker = hotspotMarkers.find(m => m.spot.id === id);
+                if (marker) marker.marker.openPopup();
+            }
+        };
+
+        renderRouteHotspotsList();
+        renderRouteAccidentsList();
+        renderAccidentsList();
+
+        // Geocode location name to coordinates
+        async function geocodeLocation(locationName) {
+            try {
+                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(locationName + ', Kerala, India')}&limit=1`);
+                const data = await response.json();
+                if (data && data.length > 0) {
+                    return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+                }
+                return null;
+            } catch (error) {
+                console.error('Geocoding error:', error);
+                return null;
+            }
+        }
+
+        // Get route from OSRM
+        async function getRoute(startCoords, endCoords) {
+            try {
+                const url = `https://router.project-osrm.org/route/v1/driving/${startCoords[1]},${startCoords[0]};${endCoords[1]},${endCoords[0]}?overview=full&geometries=geojson&steps=true`;
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+                    return data.routes[0];
+                }
+                return null;
+            } catch (error) {
+                console.error('Routing error:', error);
+                return null;
+            }
+        }
+        // Calculate distance in km
+        function calculateDistance(meters) {
+            return (meters / 1000).toFixed(1);
+        }
+
+        // Calculate time in minutes
+        function calculateTime(seconds) {
+            const minutes = Math.round(seconds / 60);
+            if (minutes < 60) return `${minutes} min`;
+            const hours = Math.floor(minutes / 60);
+            const mins = minutes % 60;
+            return `${hours}h ${mins}min`;
+        }
+
+        // Extract waypoint names from route steps
+        function extractWaypoints(steps) {
+            const waypoints = [];
+            const seen = new Set();
+            
+            steps.forEach(step => {
+                if (step.name && step.name.trim() && !seen.has(step.name)) {
+                    waypoints.push(step.name);
+                    seen.add(step.name);
+                }
+            });
+            
+            return waypoints.slice(0, 3);
+        }
+
+        // Check hotspots along route
+        function checkRouteHotspots(routeCoords) {
+            hotspotsOnRoute = [];
+            accidentsOnRoute = [];
+            
+            console.log(`Checking ${routeCoords.length} route coordinates for hotspots`);
+            console.log('Route start:', routeCoords[0], 'Route end:', routeCoords[routeCoords.length - 1]);
+
+            function pointToLineDistance(px, py, x1, y1, x2, y2) {
+                const dx = x2 - x1;
+                const dy = y2 - y1;
+
+                if (dx === 0 && dy === 0) {
+                    return haversineDistance(py, px, y1, x1);
+                }
+
+                const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)));
+                const closestX = x1 + t * dx;
+                const closestY = y1 + t * dy;
+
+                return haversineDistance(py, px, closestY, closestX);
+            }
+
+            function haversineDistance(lat1, lon1, lat2, lon2) {
+                const R = 6371;
+                const dLat = (lat2 - lat1) * Math.PI / 180;
+                const dLon = (lon2 - lon1) * Math.PI / 180;
+                const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                          Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                          Math.sin(dLon/2) * Math.sin(dLon/2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                return R * c * 1000;
+            }
+
+            accidentHotspots.forEach(spot => {
+                let minDistance = Infinity;
+
+                for (let i = 0; i < routeCoords.length - 1; i++) {
+                    const segmentStart = routeCoords[i];
+                    const segmentEnd = routeCoords[i + 1];
+
+                    const distance = pointToLineDistance(
+                        spot.lng, spot.lat,
+                        segmentStart[0], segmentStart[1],
+                        segmentEnd[0], segmentEnd[1]
+                    );
+
+                    minDistance = Math.min(minDistance, distance);
+                }
+
+                console.log(`Hotspot ${spot.name} at (${spot.lat}, ${spot.lng}): min distance ${minDistance.toFixed(0)}m`);
+                if (minDistance < 300) {
+                    hotspotsOnRoute.push(spot);
+                    console.log(`✓ Added hotspot ${spot.name} (${spot.severity}) to route at distance ${minDistance.toFixed(0)}m`);
+                }
+            });
+
+            reportedAccidents.forEach(accident => {
+                let minDistance = Infinity;
+
+                for (let i = 0; i < routeCoords.length - 1; i++) {
+                    const segmentStart = routeCoords[i];
+                    const segmentEnd = routeCoords[i + 1];
+
+                    const distance = pointToLineDistance(
+                        accident.longitude, accident.latitude,
+                        segmentStart[0], segmentStart[1],
+                        segmentEnd[0], segmentEnd[1]
+                    );
+
+                    minDistance = Math.min(minDistance, distance);
+                }
+
+                console.log(`Accident ${accident.id}: min distance ${minDistance.toFixed(0)}m`);
+                if (minDistance < 100) {
+                    accidentsOnRoute.push(accident);
+                    console.log(`✓ Added accident ${accident.id} (${accident.severity}) to route at distance ${minDistance.toFixed(0)}m`);
+                }
+            });
+
+            console.log(`Found ${hotspotsOnRoute.length} hotspots and ${accidentsOnRoute.length} accidents on route`);
+            return {
+                hotspots: hotspotsOnRoute,
+                accidents: accidentsOnRoute,
+                totalRiskPoints: hotspotsOnRoute.length + accidentsOnRoute.length
+            };
+        }
+
+        // Get route button
+        document.getElementById('getRouteBtn').addEventListener('click', async function() {
+            const startName = document.getElementById('startInput').value.trim();
+            const endName = document.getElementById('endInput').value.trim();
+            
+            if (!startName || !endName) {
+                alert('Please enter both start and destination');
+                return;
+            }
+            
+            // Store location names
+            startLocationName = startName;
+            endLocationName = endName;
+            
+            // Update hotspots tab header
+            document.getElementById('hotspotsStartLocation').textContent = startName;
+            document.getElementById('hotspotsEndLocation').textContent = endName;
+            document.getElementById('hotspotsRouteHeader').classList.add('show');
+            
+            const btn = this;
+            btn.disabled = true;
+            btn.textContent = 'Finding route...';
+            
+            if (routeLine) map.removeLayer(routeLine);
+            if (startMarker) map.removeLayer(startMarker);
+            if (endMarker) map.removeLayer(endMarker);
+            
+            // Clear previous alternative routes
+            alternativeRouteLines.forEach(line => map.removeLayer(line));
+            alternativeRouteLines = [];
+            document.getElementById('alternativeRoutePanel').classList.remove('show');
+            
+            // Use stored GPS coordinates if available (from current location button)
+            // Otherwise geocode the location name
+            let startCoords = storedStartCoords;
+            if (!startCoords) {
+                startCoords = await geocodeLocation(startName);
+            }
+            
+            let endCoords = storedEndCoords;
+            if (!endCoords) {
+                endCoords = await geocodeLocation(endName);
+            }
+            
+            if (!startCoords || !endCoords) {
+                alert('Could not find one or both locations. Please try different names.');
+                btn.disabled = false;
+                btn.textContent = 'Get Directions';
+                return;
+            }
+            
+            const route = await getRoute(startCoords, endCoords);
+            
+            if (!route) {
+                alert('Could not calculate route. Please try again.');
+                btn.disabled = false;
+                btn.textContent = 'Get Directions';
+                return;
+            }
+            
+            currentRoute = route;
+            
+            const coords = route.geometry.coordinates.map(coord => [coord[1], coord[0]]);
+            routeLine = L.polyline(coords, {
+                color: '#5f6bd8',
+                weight: 6,
+                opacity: 0.8
+            }).addTo(map);
+            
+            startMarker = L.marker(startCoords, {
+                icon: L.divIcon({
+                    html: '<div style="background: #1a73e8; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>',
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 12]
+                })
+            }).addTo(map).bindPopup('Start: ' + startName);
+            
+            endMarker = L.marker(endCoords, {
+                icon: L.divIcon({
+                    html: '<div style="background: #ea4335; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>',
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 12]
+                })
+            }).addTo(map).bindPopup('Destination: ' + endName);
+            
+            map.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
+            
+            document.getElementById('routeTime').textContent = calculateTime(route.duration);
+            document.getElementById('routeDistance').textContent = calculateDistance(route.distance) + ' km';
+             const routeRiskData = checkRouteHotspots(route.geometry.coordinates);
+
+        const criticalHotspots = hotspotsOnRoute.filter(h => h.severity === 'high').length;
+        const highHotspots = hotspotsOnRoute.filter(h => h.severity === 'medium').length;
+        const fatalAccidents = accidentsOnRoute.filter(a => a.severity === 'Fatal').length;
+        const majorAccidents = accidentsOnRoute.filter(a => a.severity === 'Major').length;
+        const minorAccidents = accidentsOnRoute.filter(a => a.severity === 'Minor').length;
+
+        const totalRiskPoints = criticalHotspots + highHotspots + fatalAccidents + majorAccidents + minorAccidents;
+
+        const waypoints = extractWaypoints(route.legs[0].steps);
+        const waypointText = waypoints.length > 0 ? 'via ' + waypoints.join(', ') : 'Direct route';
+
+        const riskInfo = totalRiskPoints > 0 ?
+            ` (${totalRiskPoints} risk point${totalRiskPoints > 1 ? 's' : ''} detected)` :
+            ' (Low risk route)';
+        document.getElementById('routeDesc').textContent = waypointText + riskInfo;
+
+        const warningDiv = document.getElementById('routeWarning');
+        const warningText = document.getElementById('warningText');
+
+        if (totalRiskPoints > 0) {
+            let warning = '';
+            if (fatalAccidents > 0) warning += `${fatalAccidents} Fatal accident${fatalAccidents > 1 ? 's' : ''}`;
+            if (majorAccidents > 0) {
+                if (warning) warning += ', ';
+                warning += `${majorAccidents} Major accident${majorAccidents > 1 ? 's' : ''}`;
+            }
+            if (minorAccidents > 0) {
+                if (warning) warning += ', ';
+                warning += `${minorAccidents} Minor accident${minorAccidents > 1 ? 's' : ''}`;
+            }
+            if (criticalHotspots > 0) {
+                if (warning) warning += ', ';
+                warning += `${criticalHotspots} Critical hotspot${criticalHotspots > 1 ? 's' : ''}`;
+            }
+            if (highHotspots > 0) {
+                if (warning) warning += ', ';
+                warning += `${highHotspots} High-risk hotspot${highHotspots > 1 ? 's' : ''}`;
+            }
+            warningText.textContent = warning + ' detected on route';
+            warningDiv.style.display = 'flex';
+        } else {
+            warningDiv.style.display = 'none';
+        }
+        
+        renderRouteHotspotsList(hotspotsOnRoute);
+        renderRouteAccidentsList(accidentsOnRoute);
+        renderAccidentsList(accidentsOnRoute);
+        
+        // Calculate and display traffic metrics
+        const trafficMetrics = calculateTrafficMetrics(route);
+        updateTrafficPanel(trafficMetrics);
+        createTrafficVisualization(route.geometry.coordinates);
+        
+        document.getElementById('routeInfo').style.display = 'block';
+        
+        btn.disabled = false;
+        btn.textContent = 'Get Directions';
+    });
+
+    // Center button
+    document.getElementById('centerBtn').addEventListener('click', function() {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(pos => {
+                const { latitude, longitude } = pos.coords;
+                map.setView([latitude, longitude], 15);
+                
+                if (currentMarker) map.removeLayer(currentMarker);
+                currentMarker = L.marker([latitude, longitude], {
+                    icon: L.divIcon({
+                        html: '<div style="background: #1a73e8; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 0 8px rgba(26,115,232,0.2), 0 2px 4px rgba(0,0,0,0.3);"></div>',
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10]
+                    })
+                }).addTo(map);
+            });
+        }
+    });
+
+    // Start navigation
+    document.getElementById('startNavBtn').addEventListener('click', function() {
+        if (!isNavigating) {
+            startNavigation();
+            this.style.background = '#ea4335';
+            this.textContent = '⏹️';
+            document.getElementById('navPanel').classList.add('show');
+        } else {
+            stopNavigation();
+            this.style.background = 'white';
+            this.textContent = '🧭';
+            document.getElementById('navPanel').classList.remove('show');
+        }
+    });
+
+    function startNavigation() {
+        if (!navigator.geolocation) return alert('Geolocation not supported');
+        isNavigating = true;
+        
+        watchId = navigator.geolocation.watchPosition(pos => {
+            const { latitude: lat, longitude: lng, speed, heading } = pos.coords;
+            
+            if (currentMarker) map.removeLayer(currentMarker);
+            currentMarker = L.marker([lat, lng], {
+                icon: L.divIcon({
+                    html: `<div style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; transform: rotate(${heading || 0}deg); transition: transform 0.5s;"><div style="font-size: 30px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));">🚗</div></div>`,
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 20]
+                })
+            }).addTo(map);
+            
+            map.panTo([lat, lng]);
+            
+            const speedKmh = speed ? (speed * 3.6).toFixed(1) : '--';
+            document.getElementById('navSpeed').textContent = speedKmh + ' km/h';
+            document.getElementById('navHeading').textContent = heading ? Math.round(heading) + '°' : '--°';
+            
+            let nearCritical = false;
+            accidentHotspots.forEach(spot => {
+                const distance = map.distance([lat, lng], [spot.lat, spot.lng]);
+                if (distance < 500 && (spot.severity === 'high' || spot.severity === 'critical') && speed > 11) {
+                    nearCritical = true;
+                }
+            });
+            
+            document.getElementById('navWarning').classList.toggle('show', nearCritical);
+        }, error => console.error(error), {
+            enableHighAccuracy: true,
+            maximumAge: 0,
+            timeout: 5000
+        });
+    }
+
+    function stopNavigation() {
+        if (watchId) {
+            navigator.geolocation.clearWatch(watchId);
+            watchId = null;
+        }
+        isNavigating = false;
+    }
+
+    // Tab switching
+    document.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', function() {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            this.classList.add('active');
+            
+            document.getElementById('routeTab').style.display = 'none';
+            document.getElementById('hotspotsTab').style.display = 'none';
+            document.getElementById('navigateTab').style.display = 'none';
+            
+            const selectedTab = this.getAttribute('data-tab');
+            
+            // Add or remove body class for hotspots and navigate tabs
+            if (selectedTab === 'hotspots') {
+                document.body.classList.add('hotspots-active');
+                document.body.classList.remove('navigate-active');
+            } else if (selectedTab === 'navigate') {
+                document.body.classList.add('navigate-active');
+                document.body.classList.remove('hotspots-active');
+            } else {
+                document.body.classList.remove('hotspots-active');
+                document.body.classList.remove('navigate-active');
+            }
+            
+            if (selectedTab === 'route') {
+                document.getElementById('routeTab').style.display = 'block';
+            } else if (selectedTab === 'hotspots') {
+                document.getElementById('hotspotsTab').style.display = 'block';
+            } else if (selectedTab === 'navigate') {
+                document.getElementById('navigateTab').style.display = 'block';
+            }
+        });
+    });
+
+    fetchAccidentReports();
+</script>
+</body>
+</html>

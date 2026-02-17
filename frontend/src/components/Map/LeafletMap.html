@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+        }
+
+        #map {
+            width: 100vw;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <script>
+        // Hotspot data
+        const hotspots = [
+            { id: 1, lat: 8.5241, lng: 76.9366, riskLevel: "High", accidents: 45, fatal: 3, major: 12 },
+            { id: 2, lat: 8.4855, lng: 76.9492, riskLevel: "Medium", accidents: 28, fatal: 1, major: 5 },
+            { id: 3, lat: 8.4925, lng: 76.9550, riskLevel: "Low", accidents: 34, fatal: 1, major: 7 },
+            { id: 4, lat: 8.5089, lng: 76.9570, riskLevel: "Medium", accidents: 31, fatal: 2, major: 8 },
+            { id: 5, lat: 8.5194, lng: 76.9458, riskLevel: "High", accidents: 52, fatal: 4, major: 15 },
+            { id: 6, lat: 8.5320, lng: 76.9280, riskLevel: "Low", accidents: 19, fatal: 0, major: 3 }
+        ];
+
+        // Initialize map
+        const map = L.map('map').setView([8.5089, 76.9458], 12);
+
+        // Add map tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Add markers
+        hotspots.forEach(hotspot => {
+            const color = hotspot.riskLevel === 'High' ? '#ef4444' : 
+                          hotspot.riskLevel === 'Medium' ? '#f59e0b' : '#10b981';
+            
+            const icon = L.divIcon({
+                className: 'custom-marker',
+                html: `<div style="
+                    background-color: ${color};
+                    width: 35px;
+                    height: 35px;
+                    border-radius: 50%;
+                    border: 3px solid white;
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-weight: bold;
+                    color: white;
+                    font-size: 14px;
+                    cursor: pointer;
+                ">${hotspot.id}</div>`,
+                iconSize: [35, 35],
+                iconAnchor: [17.5, 17.5]
+            });
+
+            const marker = L.marker([hotspot.lat, hotspot.lng], { icon }).addTo(map);
+            
+            // Popup on click
+            marker.bindPopup(`
+                <div style="font-family: Arial, sans-serif;">
+                    <h3 style="margin: 0 0 8px 0; color: #333;">Hotspot #${hotspot.id}</h3>
+                    <p style="margin: 3px 0;"><strong>Risk:</strong> <span style="color: ${color};">${hotspot.riskLevel}</span></p>
+                    <p style="margin: 3px 0;"><strong>Accidents:</strong> ${hotspot.accidents}</p>
+                    <p style="margin: 3px 0;"><strong>Fatal:</strong> ${hotspot.fatal}</p>
+                    <p style="margin: 3px 0;"><strong>Major:</strong> ${hotspot.major}</p>
+                </div>
+            `);
+        });
+    </script>
+</body>
+</html>
