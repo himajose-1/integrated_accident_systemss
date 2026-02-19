@@ -321,6 +321,7 @@ function MapView({ accidents, alerts, selectedAccident, setSelectedAccident, sel
   const [filteredAccidents, setFilteredAccidents] = useState(accidents || [])
   const [isSearching, setIsSearching] = useState(false)
   const [dynamicHotspots, setDynamicHotspots] = useState([])
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || 'YOUR_GOOGLE_MAPS_API_KEY'
   const hasValidGoogleKey = googleMapsApiKey && googleMapsApiKey !== 'YOUR_GOOGLE_MAPS_API_KEY'
 
@@ -599,354 +600,265 @@ function MapView({ accidents, alerts, selectedAccident, setSelectedAccident, sel
   }
 
   return (
-    <div className="h-full flex relative">
-      {/* Left Sidebar - Search & Hotspot Details */}
-      <div className="w-80 bg-gray-800 border-r border-gray-700 p-6 overflow-y-auto">
-        <div className="space-y-6">
-          {/* Search Section */}
-          <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
-            <div className="mb-3 flex items-center gap-2">
-              <Search size={16} className="text-cyan-400" />
-              <h3 className="text-sm font-bold text-cyan-400">Search Location</h3>
-            </div>
-            <div className="space-y-2">
-              <div className="relative">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                  placeholder="Search location... or type 'my location'"
-                  className="w-full px-3 py-2 pl-9 bg-gray-900 border border-gray-600 rounded-lg text-white text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 transition"
-                />
-                <Search size={14} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-              </div>
-              <button
-                onClick={handleSearch}
-                disabled={isSearching || !searchQuery.trim()}
-                className="w-full px-4 py-2 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed text-white rounded-lg font-semibold transition shadow-lg shadow-cyan-500/20 disabled:shadow-none flex items-center justify-center gap-2 text-sm"
-              >
-                <Search size={14} />
-                {isSearching ? 'Searching...' : 'Find Hotspots (5km)'}
-              </button>
-              {searchLocation && (
-                <button
-                  onClick={handleClearSearch}
-                  className="w-full px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-400 rounded-lg font-medium transition flex items-center justify-center gap-2 text-sm"
-                >
-                  <X size={14} />
-                  Clear Search
-                </button>
-              )}
-            </div>
-            {searchLocation && (
-              <div className="mt-3 p-2 bg-cyan-500/10 border border-cyan-500/30 rounded-lg">
-                <p className="text-xs text-cyan-400 font-medium">
-                  📍 {filteredHotspots.length} hotspot{filteredHotspots.length !== 1 ? 's' : ''} found within 5km
-                </p>
-              </div>
-            )}
-
-            {/* Report Accident Now Button */}
-            <button
-              onClick={handleReportAccidentNow}
-              className="w-full px-4 py-3 mt-4 bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 text-white rounded-lg font-semibold transition shadow-lg shadow-red-500/20 flex items-center justify-center gap-2 text-sm"
-            >
-              <AlertCircle size={16} />
-              Report Accident Now
-            </button>
-          </div>
-
-          {/* Hotspot Details */}
-          {selectedHotspot ? (
-            <>
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-bold text-white">Hotspot Details</h3>
-                <button
-                  onClick={() => setSelectedHotspot(null)}
-                  className="text-gray-400 hover:text-white"
-                >
-                  <X size={24} />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                {/* Hotspot Type Badge */}
-                {selectedHotspot.isDynamic && (
-                  <div className={`rounded-lg p-3 border ${
-                    selectedHotspot.type === 'sameSpot'
-                      ? 'bg-purple-900/30 border-purple-500/50'
-                      : 'bg-cyan-900/30 border-cyan-500/50'
-                  }`}>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-lg ${
-                        selectedHotspot.type === 'sameSpot' ? 'text-purple-400' : 'text-cyan-400'
-                      }`}>
-                        {selectedHotspot.type === 'sameSpot' ? '🎯' : '📍'}
-                      </span>
-                      <div>
-                        <p className={`text-sm font-semibold ${
-                          selectedHotspot.type === 'sameSpot' ? 'text-purple-300' : 'text-cyan-300'
-                        }`}>
-                          {selectedHotspot.type === 'sameSpot' ? 'Auto-Generated: Same Spot' : 'Auto-Generated: Cluster'}
-                        </p>
-                        <p className="text-xs text-gray-400 mt-1">
-                          {selectedHotspot.type === 'sameSpot' 
-                            ? 'This hotspot was created because multiple reports were made at the same exact location.'
-                            : 'This hotspot was created from a cluster of nearby accidents.'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Basic Information */}
-                <div className="bg-gray-700 rounded-lg p-4">
-                  <h4 className="text-lg font-semibold text-white mb-3">{selectedHotspot.name}</h4>
-                  <div className="space-y-3 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Risk Level:</span>
-                      <span className={`font-semibold ${
-                        selectedHotspot.riskLevel === 'High' ? 'text-red-400' :
-                        selectedHotspot.riskLevel === 'Medium' ? 'text-yellow-400' : 'text-green-400'
-                      }`}>
-                        {selectedHotspot.riskLevel}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Total Accidents:</span>
-                      <span className="text-white font-semibold">{selectedHotspot.accidents}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Fatal Accidents:</span>
-                      <span className="text-red-400 font-semibold">{selectedHotspot.fatal}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Major Accidents:</span>
-                      <span className="text-orange-400 font-semibold">{selectedHotspot.major}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Minor Accidents:</span>
-                      <span className="text-green-400 font-semibold">{selectedHotspot.accidents - selectedHotspot.fatal - selectedHotspot.major}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Location & Coordinates */}
-                <div className="bg-gray-700 rounded-lg p-4">
-                  <h4 className="text-lg font-semibold text-white mb-3 flex items-center">
-                    <MapPin size={18} className="mr-2" />
-                    Location Details
-                  </h4>
-                  <div className="space-y-3 text-sm">
-                    <div>
-                      <span className="text-gray-400 block mb-1">Coordinates:</span>
-                      <div className="bg-gray-600 rounded p-2 font-mono text-xs">
-                        <div>Latitude: {selectedHotspot.lat.toFixed(6)}</div>
-                        <div>Longitude: {selectedHotspot.lng.toFixed(6)}</div>
-                      </div>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Location Type:</span>
-                      <span className="text-white font-semibold">Road Junction</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Area:</span>
-                      <span className="text-white font-semibold">Urban</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Traffic Density:</span>
-                      <span className="text-yellow-400 font-semibold">High</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Accident Statistics */}
-                <div className="bg-gray-700 rounded-lg p-4">
-                  <h4 className="text-lg font-semibold text-white mb-3 flex items-center">
-                    <TrendingUp size={18} className="mr-2" />
-                    Accident Statistics
-                  </h4>
-                  <div className="space-y-3 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Accidents/Month:</span>
-                      <span className="text-white font-semibold">{(selectedHotspot.accidents / 12).toFixed(1)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Fatality Rate:</span>
-                      <span className="text-red-400 font-semibold">{((selectedHotspot.fatal / selectedHotspot.accidents) * 100).toFixed(1)}%</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Major Injury Rate:</span>
-                      <span className="text-orange-400 font-semibold">{((selectedHotspot.major / selectedHotspot.accidents) * 100).toFixed(1)}%</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Last Incident:</span>
-                      <span className="text-white font-semibold">2 days ago</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Trend:</span>
-                      <span className="text-red-400 font-semibold">↗ Increasing</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Contributing Factors */}
-                <div className="bg-gray-700 rounded-lg p-4">
-                  <h4 className="text-lg font-semibold text-white mb-3 flex items-center">
-                    <AlertTriangle size={18} className="mr-2" />
-                    Contributing Factors
-                  </h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-400">Poor Visibility:</span>
-                      <span className="text-yellow-400">High Risk</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-400">Traffic Congestion:</span>
-                      <span className="text-orange-400">Moderate</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-400">Speeding:</span>
-                      <span className="text-red-400">Critical</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-400">Signal Malfunction:</span>
-                      <span className="text-green-400">Low Risk</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-400">Weather Conditions:</span>
-                      <span className="text-blue-400">Variable</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Recent Incidents */}
-                <div className="bg-gray-700 rounded-lg p-4">
-                  <h4 className="text-lg font-semibold text-white mb-3 flex items-center">
-                    <Clock size={18} className="mr-2" />
-                    Recent Incidents
-                  </h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between items-center py-2 border-b border-gray-600">
-                      <div>
-                        <div className="text-white font-medium">Vehicle Collision</div>
-                        <div className="text-gray-400 text-xs">2 days ago • Major injury</div>
-                      </div>
-                      <span className="text-orange-400 text-xs">Major</span>
-                    </div>
-                    <div className="flex justify-between items-center py-2 border-b border-gray-600">
-                      <div>
-                        <div className="text-white font-medium">Pedestrian Accident</div>
-                        <div className="text-gray-400 text-xs">1 week ago • Fatal</div>
-                      </div>
-                      <span className="text-red-400 text-xs">Fatal</span>
-                    </div>
-                    <div className="flex justify-between items-center py-2">
-                      <div>
-                        <div className="text-white font-medium">Minor Collision</div>
-                        <div className="text-gray-400 text-xs">2 weeks ago • Property damage</div>
-                      </div>
-                      <span className="text-green-400 text-xs">Minor</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <button
-                    onClick={() => setActiveTab('map')}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg transition font-medium"
-                  >
-                    View Integrated Map
-                  </button>
-                  <button
-                    onClick={() => window.open(`https://www.google.com/maps?q=${selectedHotspot.lat},${selectedHotspot.lng}`, '_blank')}
-                    className="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg transition font-medium"
-                  >
-                    View on Google Maps
-                  </button>
-                  <button
-                    onClick={() => setShowPreventionStrategy(!showPreventionStrategy)}
-                    className="w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-3 rounded-lg transition font-medium"
-                  >
-                    {showPreventionStrategy ? 'Hide Prevention Strategy' : 'Show Prevention Strategy'}
-                  </button>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="text-center text-gray-400 mt-8">
-              <MapPin size={48} className="mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium mb-2">Select a Hotspot</p>
-              <p className="text-sm">Click on any hotspot marker on the map to view details here</p>
-            </div>
-          )}
-
-          {/* Prevention Strategy Panel */}
-          {showPreventionStrategy && selectedHotspot && (
-            <div className="mt-6 bg-gray-700 rounded-lg p-4 border border-orange-500/30">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-white flex items-center">
-                  <Shield size={20} className="mr-2 text-orange-400" />
-                  Prevention Strategies
-                </h3>
-                <button
-                  onClick={() => setShowPreventionStrategy(false)}
-                  className="text-gray-400 hover:text-white"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                {/* Immediate Actions */}
-                <div className="bg-gray-600 rounded-lg p-3">
-                  <h4 className="text-md font-semibold text-orange-400 mb-2">Immediate Actions</h4>
-                  <ul className="text-sm text-gray-300 space-y-1">
-                    <li>• Install additional traffic signals and signage</li>
-                    <li>• Deploy speed cameras and enforcement</li>
-                    <li>• Improve road lighting and visibility</li>
-                    <li>• Add pedestrian crossings and barriers</li>
-                  </ul>
-                </div>
-
-                {/* Long-term Solutions */}
-                <div className="bg-gray-600 rounded-lg p-3">
-                  <h4 className="text-md font-semibold text-orange-400 mb-2">Long-term Solutions</h4>
-                  <ul className="text-sm text-gray-300 space-y-1">
-                    <li>• Road infrastructure redesign and widening</li>
-                    <li>• Traffic flow optimization and roundabout installation</li>
-                    <li>• Public awareness campaigns and education</li>
-                    <li>• Regular maintenance and safety audits</li>
-                  </ul>
-                </div>
-
-                {/* Risk Reduction Metrics */}
-                <div className="bg-gray-600 rounded-lg p-3">
-                  <h4 className="text-md font-semibold text-orange-400 mb-2">Expected Impact</h4>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-green-400">60%</div>
-                      <div className="text-gray-400">Accident Reduction</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-400">3-6</div>
-                      <div className="text-gray-400">Months Implementation</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+    <div className="w-full h-full bg-gray-900 flex flex-col overflow-hidden">
+      {/* Mobile Header */}
+      <div className="md:hidden bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center justify-between flex-shrink-0 z-50 relative">
+        <button
+          onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+          className="p-2 rounded-lg hover:bg-gray-700 transition"
+        >
+          <Menu size={24} className="text-gray-300" />
+        </button>
+        <div className="flex-1 ml-4">
+          <h1 className="text-lg font-bold text-white">Live Map</h1>
+          <p className="text-xs text-gray-400">Search & Hotspots</p>
         </div>
+        {searchLocation && (
+          <div className="text-xs bg-cyan-500/20 px-2 py-1 rounded text-cyan-400">
+            {filteredHotspots.length}
+          </div>
+        )}
       </div>
 
-      {/* Map Content */}
-      <div className="flex-1 flex flex-col">
-        {/* Map Display */}
-        <div style={{ height: '500px', flexShrink: 0 }}>
-          <div className="h-full p-4">
-            <div className="h-full rounded-lg overflow-hidden shadow-2xl">
+      {/* Content Area */}
+      <div className="flex-1 flex flex-col md:flex-row min-h-0 relative overflow-hidden">
+        
+        {/* Mobile Overlay - Blocks interaction with map */}
+        {isMobileSidebarOpen && (
+          <div
+            className="md:hidden absolute inset-0 bg-black/50 z-30"
+            onClick={() => setIsMobileSidebarOpen(false)}
+          />
+        )}
+
+        {/* Sidebar - Overlays map on mobile */}
+        <div className={`
+          absolute md:relative top-0 left-0 bottom-0 w-80 bg-gray-800 border-r border-gray-700
+          p-6 overflow-y-auto z-40 md:z-auto flex-shrink-0 h-full
+          transition-transform duration-300 transform
+          ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+        `}>
+          <div className="space-y-6">
+            {/* Mobile Close Button */}
+            <div className="md:hidden flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-white">Search & Details</h2>
+              <button
+                onClick={() => setIsMobileSidebarOpen(false)}
+                className="p-2 hover:bg-gray-700 rounded transition"
+              >
+                <X size={20} className="text-gray-400" />
+              </button>
+            </div>
+
+            {/* Search Section */}
+            <div className="bg-gray-700 rounded-lg p-4 border border-gray-600">
+              <div className="mb-3 flex items-center gap-2">
+                <Search size={16} className="text-cyan-400" />
+                <h3 className="text-sm font-bold text-cyan-400">Search Location</h3>
+              </div>
+              <div className="space-y-2">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                    placeholder="Search location or 'my location'"
+                    className="w-full px-3 py-2 pl-9 bg-gray-900 border border-gray-600 rounded-lg text-white text-sm placeholder-gray-400 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/50 transition"
+                  />
+                  <Search size={14} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                </div>
+                <button
+                  onClick={handleSearch}
+                  disabled={isSearching || !searchQuery.trim()}
+                  className="w-full px-4 py-2 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed text-white rounded-lg font-semibold transition shadow-lg shadow-cyan-500/20 disabled:shadow-none flex items-center justify-center gap-2 text-sm"
+                >
+                  <Search size={14} />
+                  {isSearching ? 'Searching...' : 'Find Hotspots (5km)'}
+                </button>
+                {searchLocation && (
+                  <button
+                    onClick={handleClearSearch}
+                    className="w-full px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-400 rounded-lg font-medium transition flex items-center justify-center gap-2 text-sm"
+                  >
+                    <X size={14} />
+                    Clear Search
+                  </button>
+                )}
+              </div>
+              {searchLocation && (
+                <div className="mt-3 p-2 bg-cyan-500/10 border border-cyan-500/30 rounded-lg">
+                  <p className="text-xs text-cyan-400 font-medium">
+                    📍 {filteredHotspots.length} hotspot{filteredHotspots.length !== 1 ? 's' : ''} found within 5km
+                  </p>
+                </div>
+              )}
+
+              {/* Report Accident Now Button */}
+              <button
+                onClick={handleReportAccidentNow}
+                className="w-full px-4 py-3 mt-4 bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-600 hover:to-orange-600 text-white rounded-lg font-semibold transition shadow-lg shadow-red-500/20 flex items-center justify-center gap-2 text-sm"
+              >
+                <AlertCircle size={16} />
+                Report Accident Now
+              </button>
+            </div>
+
+            {/* Hotspot Details - Mobile Responsive */}
+            {selectedHotspot ? (
+              <>
+                <div className="flex items-center justify-between mb-4 md:mb-6">
+                  <h3 className="text-lg md:text-xl font-bold text-white truncate">Hotspot Details</h3>
+                  <button
+                    onClick={() => setSelectedHotspot(null)}
+                    className="text-gray-400 hover:text-white flex-shrink-0"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div className="space-y-3 md:space-y-4 pb-6">
+                  {/* Hotspot Type Badge */}
+                  {selectedHotspot.isDynamic && (
+                    <div className={`rounded-lg p-3 border ${
+                      selectedHotspot.type === 'sameSpot'
+                        ? 'bg-purple-900/30 border-purple-500/50'
+                        : 'bg-cyan-900/30 border-cyan-500/50'
+                    }`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-lg ${
+                          selectedHotspot.type === 'sameSpot' ? 'text-purple-400' : 'text-cyan-400'
+                        }`}>
+                          {selectedHotspot.type === 'sameSpot' ? '🎯' : '📍'}
+                        </span>
+                        <div className="min-w-0">
+                          <p className={`text-xs md:text-sm font-semibold ${
+                            selectedHotspot.type === 'sameSpot' ? 'text-purple-300' : 'text-cyan-300'
+                          }`}>
+                            {selectedHotspot.type === 'sameSpot' ? 'Same Spot' : 'Cluster'}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1 line-clamp-2">
+                            {selectedHotspot.type === 'sameSpot' 
+                              ? 'Multiple reports at same location'
+                              : 'Auto-generated from nearby accidents'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Basic Information */}
+                  <div className="bg-gray-700 rounded-lg p-3 md:p-4">
+                    <h4 className="text-base md:text-lg font-semibold text-white mb-2 truncate">{selectedHotspot.name}</h4>
+                    <div className="space-y-2 text-xs md:text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Risk Level:</span>
+                        <span className={`font-semibold ${
+                          selectedHotspot.riskLevel === 'High' ? 'text-red-400' :
+                          selectedHotspot.riskLevel === 'Medium' ? 'text-yellow-400' : 'text-green-400'
+                        }`}>
+                          {selectedHotspot.riskLevel}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Total Accidents:</span>
+                        <span className="text-white font-semibold">{selectedHotspot.accidents}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Fatal:</span>
+                        <span className="text-red-400 font-semibold">{selectedHotspot.fatal}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Major:</span>
+                        <span className="text-orange-400 font-semibold">{selectedHotspot.major}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Location & Coordinates */}
+                  <div className="bg-gray-700 rounded-lg p-3 md:p-4">
+                    <h4 className="text-base md:text-lg font-semibold text-white mb-2 flex items-center gap-1">
+                      <MapPin size={16} className="flex-shrink-0" />
+                      <span className="truncate">Location</span>
+                    </h4>
+                    <div className="space-y-2 text-xs md:text-sm">
+                      <div>
+                        <span className="text-gray-400 block mb-1">Coordinates:</span>
+                        <div className="bg-gray-600 rounded p-2 font-mono text-xs break-all">
+                          <div>{selectedHotspot.lat.toFixed(6)}</div>
+                          <div>{selectedHotspot.lng.toFixed(6)}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => {
+                        setActiveTab('map')
+                        setIsMobileSidebarOpen(false)
+                      }}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg transition font-medium text-sm"
+                    >
+                      View Integrated Map
+                    </button>
+                    <button
+                      onClick={() => window.open(`https://www.google.com/maps?q=${selectedHotspot.lat},${selectedHotspot.lng}`, '_blank')}
+                      className="w-full bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg transition font-medium text-sm"
+                    >
+                      Google Maps
+                    </button>
+                    <button
+                      onClick={() => setShowPreventionStrategy(!showPreventionStrategy)}
+                      className="w-full bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded-lg transition font-medium text-sm"
+                    >
+                      {showPreventionStrategy ? 'Hide Strategy' : 'Show Strategy'}
+                    </button>
+                  </div>
+
+                  {/* Prevention Strategy */}
+                  {showPreventionStrategy && selectedHotspot && (
+                    <div className="mt-4 bg-gray-700 rounded-lg p-3 md:p-4 border border-orange-500/30">
+                      <h3 className="text-base md:text-lg font-bold text-white flex items-center gap-2 mb-3">
+                        <Shield size={18} className="text-orange-400 flex-shrink-0" />
+                        <span>Prevention</span>
+                      </h3>
+                      <div className="space-y-3 text-xs md:text-sm">
+                        <div className="bg-gray-600 rounded-lg p-2">
+                          <h4 className="text-md font-semibold text-orange-400 mb-1">Immediate Actions</h4>
+                          <ul className="text-gray-300 space-y-1">
+                            <li>• Add traffic signals</li>
+                            <li>• Deploy speed cameras</li>
+                            <li>• Improve visibility</li>
+                          </ul>
+                        </div>
+                        <div className="bg-gray-600 rounded-lg p-2">
+                          <h4 className="text-md font-semibold text-orange-400 mb-1">Long-term</h4>
+                          <ul className="text-gray-300 space-y-1">
+                            <li>• Road redesign</li>
+                            <li>• Traffic optimization</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="text-center text-gray-400 mt-4 md:mt-8">
+                <MapPin size={32} className="mx-auto mb-2 md:mb-4 opacity-50" />
+                <p className="text-sm md:text-lg font-medium mb-1">Select a Hotspot</p>
+                <p className="text-xs md:text-sm">Click on map markers for details</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Map Container - Flexes to fill remaining space */}
+        <div className="flex-1 min-w-0 min-h-0 relative bg-gray-800 z-0">
+          <div className="w-full h-full p-0 md:p-4">
+            <div className="w-full h-full rounded-none md:rounded-lg overflow-hidden bg-gray-700 z-0">
               <LeafletMap
                 accidents={searchLocation ? filteredAccidents : accidents}
                 alerts={alerts}
@@ -997,13 +909,11 @@ function RiskPredictionView({ handleRiskPrediction, riskPrediction }) {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Prediction Form */}
       <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
         <h3 className="text-lg font-semibold mb-6 text-white flex items-center gap-2">
           <AlertTriangle className="text-orange-500" />
           Predict Accident Risk
         </h3>
-
         <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm mb-2 text-gray-400">Speed (km/h)</label>
@@ -1016,7 +926,6 @@ function RiskPredictionView({ handleRiskPrediction, riskPrediction }) {
               max="200"
             />
           </div>
-
           <div>
             <label className="block text-sm mb-2 text-gray-400">Weather</label>
             <select
@@ -1030,7 +939,6 @@ function RiskPredictionView({ handleRiskPrediction, riskPrediction }) {
               <option>Snow</option>
             </select>
           </div>
-
           <div>
             <label className="block text-sm mb-2 text-gray-400">Vehicle Type</label>
             <select
@@ -1039,12 +947,11 @@ function RiskPredictionView({ handleRiskPrediction, riskPrediction }) {
               className="w-full bg-gray-700 text-white rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option>Car</option>
-              <option>Truck</option>
               <option>Motorcycle</option>
+              <option>Truck</option>
               <option>Bus</option>
             </select>
           </div>
-
           <div>
             <label className="block text-sm mb-2 text-gray-400">Road Condition</label>
             <select
@@ -1055,10 +962,9 @@ function RiskPredictionView({ handleRiskPrediction, riskPrediction }) {
               <option>Dry</option>
               <option>Wet</option>
               <option>Icy</option>
-              <option>Damaged</option>
+              <option>Muddy</option>
             </select>
           </div>
-
           <div>
             <label className="block text-sm mb-2 text-gray-400">Visibility</label>
             <select
@@ -1069,9 +975,9 @@ function RiskPredictionView({ handleRiskPrediction, riskPrediction }) {
               <option>Good</option>
               <option>Moderate</option>
               <option>Poor</option>
+              <option>Very Poor</option>
             </select>
           </div>
-
           <div>
             <label className="block text-sm mb-2 text-gray-400">Time of Day</label>
             <select
@@ -1079,13 +985,13 @@ function RiskPredictionView({ handleRiskPrediction, riskPrediction }) {
               onChange={(e) => setFormData({ ...formData, time_of_day: e.target.value })}
               className="w-full bg-gray-700 text-white rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500"
             >
+              <option>Early Morning</option>
               <option>Morning</option>
               <option>Afternoon</option>
               <option>Evening</option>
               <option>Night</option>
             </select>
           </div>
-
           <div>
             <label className="block text-sm mb-2 text-gray-400">Traffic Density</label>
             <select
@@ -1096,104 +1002,38 @@ function RiskPredictionView({ handleRiskPrediction, riskPrediction }) {
               <option>Low</option>
               <option>Medium</option>
               <option>High</option>
+              <option>Very High</option>
             </select>
           </div>
-
-          <div className="md:col-span-2">
-            <button
-              type="submit"
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition font-semibold"
-            >
-              Predict Risk
-            </button>
-          </div>
+          <button
+            type="submit"
+            className="md:col-span-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg  transition"
+          >
+            Predict Risk
+          </button>
         </form>
       </div>
-
-      {/* Prediction Results */}
       {riskPrediction && (
         <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-xl font-semibold text-white">Prediction Results</h3>
-            <div className="text-center">
-              <div className="text-sm text-gray-400 mb-1">Risk Score</div>
-              <div
-                className="text-5xl font-bold"
-                style={{ color: getRiskColor(riskPrediction.risk_score) }}
-              >
-                {riskPrediction.risk_score}
+          <h3 className="text-lg font-semibold mb-4 text-white">Risk Analysis</h3>
+          <div className="space-y-4">
+            <div>
+              <div className="flex justify-between mb-2">
+                <span className="text-gray-400">Risk Score</span>
+                <span className="text-white font-semibold">{riskPrediction.score}</span>
+              </div>
+              <div className="w-full bg-gray-700 rounded-lg h-3 overflow-hidden">
+                <div
+                  className="h-full transition-all duration-300"
+                  style={{
+                    width: `${riskPrediction.score}%`,
+                    backgroundColor: getRiskColor(riskPrediction.score)
+                  }}
+                />
               </div>
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="bg-gray-700 rounded-lg p-4 text-center">
-              <div className="text-sm text-gray-400 mb-1">Predicted Severity</div>
-              <div className="text-2xl font-bold text-white">{riskPrediction.severity}</div>
-            </div>
-            <div className="bg-gray-700 rounded-lg p-4 text-center">
-              <div className="text-sm text-gray-400 mb-1">Confidence</div>
-              <div className="text-2xl font-bold text-white">{riskPrediction.confidence}%</div>
-            </div>
-            <div className="bg-gray-700 rounded-lg p-4 text-center">
-              <div className="text-sm text-gray-400 mb-1">Most Likely</div>
-              <div className="text-2xl font-bold text-white">
-                {Object.entries(riskPrediction.probabilities).reduce((a, b) =>
-                  a[1] > b[1] ? a : b
-                )[0]}
-              </div>
-            </div>
-          </div>
-
-          {/* Probability Distribution */}
-          <div className="bg-gray-700 rounded-lg p-4 mb-6">
-            <h4 className="font-semibold mb-4 text-white">Severity Probabilities</h4>
-            <div className="space-y-3">
-              {Object.entries(riskPrediction.probabilities).map(([severity, prob]) => (
-                <div key={severity}>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-gray-300">{severity}</span>
-                    <span className="text-gray-400">{prob.toFixed(1)}%</span>
-                  </div>
-                  <div className="w-full bg-gray-600 rounded-full h-2">
-                    <div
-                      className="h-2 rounded-full transition-all"
-                      style={{
-                        width: `${prob}%`,
-                        backgroundColor:
-                          severity === 'Fatal' ? '#EF4444' :
-                          severity === 'Major' ? '#F59E0B' : '#10B981'
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* SHAP Values */}
-          <div className="bg-gray-700 rounded-lg p-4">
-            <h4 className="font-semibold mb-4 text-white">Feature Impact (SHAP Values)</h4>
-            <div className="space-y-3">
-              {Object.entries(riskPrediction.shap_values).map(([feature, data]) => (
-                <div key={feature}>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="capitalize text-gray-300">{feature.replace('_', ' ')}</span>
-                    <span className={data.impact === 'positive' ? 'text-red-400' : 'text-green-400'}>
-                      {data.shap_value.toFixed(3)}
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-600 rounded-full h-2">
-                    <div
-                      className="h-2 rounded-full"
-                      style={{
-                        width: `${Math.min(Math.abs(data.shap_value) * 100, 100)}px`,
-                        backgroundColor: data.impact === 'positive' ? '#EF4444' : '#10B981'
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
+            <div className="bg-gray-700 rounded-lg p-4">
+              <p className="text-sm text-gray-300">{riskPrediction.recommendation}</p>
             </div>
           </div>
         </div>
@@ -1201,6 +1041,8 @@ function RiskPredictionView({ handleRiskPrediction, riskPrediction }) {
     </div>
   )
 }
+
+
 
 // ==================== Reports View ====================
 function ReportsView({ accidents, accidentImages = {} }) {
