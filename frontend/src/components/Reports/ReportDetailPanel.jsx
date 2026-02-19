@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { X, Download, Trash2, AlertTriangle, Clock, FileText, Image, Video, Settings, Eye } from 'lucide-react'
 import api from '../../services/api'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://integrated-accident-systemss.onrender.com'
+
 
 function ReportDetailPanel({ report, onClose, onDelete }) {
   const [evidence, setEvidence] = useState([])
