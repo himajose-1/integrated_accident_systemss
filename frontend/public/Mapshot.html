@@ -1812,9 +1812,10 @@
         // Fetch accident reports from backend
         async function fetchAccidentReports() {
             try {
-                const response = await fetch('http://localhost:8000/api/reports/?limit=50');
-                const data = await response.json();
-                if (data.success) {
+                const response = await fetch('https://integrated-accident-systemss.onrender.com/api/reports/?limit=50');
+
+                const data = await respons      
+                    if (data.success) {
                     reportedAccidents = data.data.reports.map(report => ({
                         id: report.id,
                         latitude: report.latitude,
