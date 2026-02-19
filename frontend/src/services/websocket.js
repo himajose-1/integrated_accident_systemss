@@ -1,4 +1,4 @@
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/api/member3/ws'
+const WS_URL = import.meta.env.VITE_WS_URL || 'wss://integrated-accident-systemss.onrender.com/api/member3/ws'
 
 let websocket = null
 let reconnectInterval = null
