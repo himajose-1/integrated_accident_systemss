@@ -4,7 +4,8 @@ import RouteSearch from './RouteSearch'
 import SafetyAnalysis from './SafetyAnalysis'
 
 // IMPORTANT: Change this to your backend URL
-const API_BASE_URL = 'http://localhost:8000'
+const API_BASE_URL = 'https://integrated-accident-systemss.onrender.com'
+
 
 function RouteAnalysisIntegration() {
   const [loading, setLoading] = useState(false)
@@ -14,7 +15,7 @@ function RouteAnalysisIntegration() {
   // Test API connection on component mount
   useEffect(() => {
     console.log('🔗 Testing API connection...')
-    fetch('http://localhost:8000/')
+    fetch('https://integrated-accident-systemss.onrender.com/')
       .then(r => r.json())
       .then(data => console.log('✅ Backend connected:', data))
       .catch(err => console.error('❌ Backend connection failed:', err))
